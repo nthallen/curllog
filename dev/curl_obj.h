@@ -26,6 +26,7 @@ class curl_obj {
     CURL *handle;
     curl_global *global;
     curl_log_level_t llvl;
+    const char *req_url;
     const char *trans_desc;
     int trans_num;
     int req_num;

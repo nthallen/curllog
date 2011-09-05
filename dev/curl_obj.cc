@@ -40,6 +40,44 @@ curl_global::curl_global() {
 }
 
 curl_global::~curl_global() {
+  if ( next_trans > 0 ) {
+    FILE *fp, *ifp;
+    char fname[80];
+    snprintf(fname, 80, "%s/index.html", trans_dir);
+    fp = fopen(fname, "w");
+    if ( fp == NULL ) nl_error(3, "FATAL: Unable to open index '%s'\n", fname );
+    fprintf( fp, "%s",
+      "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n"
+      "  \"http://www.w3.org/TR/html4/strict.dtd\">\n"
+      "<HTML>\n"
+      "<HEAD>\n"
+      "  <TITLE>Transaction Log</TITLE>\n"
+      "</HEAD>\n"
+      "<BODY>\n" );
+    fprintf( fp, "<h1>Transaction Log</h1>\n" );
+    fprintf( fp, "<table>\n<tr><th>Start Time</th><th>Dur</th>"
+        "<th>Transaction</th><th>Status</th></tr>\n" );
+    while ( --next_trans >= 0 ) {
+      snprintf( fname, 80, "%s/%02d/summary.txt", trans_dir, next_trans );
+      ifp = fopen( fname, "r" );
+      if ( ifp == NULL ) {
+        snprintf( fname, 80, "%s/%02d.summary.txt", trans_dir, next_trans );
+        ifp = fopen( fname, "r" );
+      }
+      if ( ifp != NULL ) {
+        for (;;) {
+          char buf[256];
+          int n = fread( buf, 1, 256, ifp );
+          if ( n > 0 ) {
+            fwrite( buf, 1, n, fp );
+          } else break;
+        }
+        fclose(ifp);
+      } else {
+        fprintf(fp, "<tr><td colspan=\"4\">Missing</td></tr>\n" );
+      }
+    }
+  }
   curl_global_cleanup();
 }
 
@@ -75,6 +113,7 @@ curl_obj::curl_obj() {
   trans_desc = NULL;
   req_num = 0;
   req_status = 0;
+  req_url = NULL;
   req_summary = NULL;
   req_data_log = NULL;
   req_hdr_log = NULL;
@@ -87,9 +126,12 @@ curl_obj::curl_obj() {
     nl_error(3, "curl_easy_setup(CURLOPT_HEADERFUNCTION) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_HEADERDATA, this ) )
     nl_error(3, "curl_easy_setup(CURLOPT_HEADERDATA) failed\n");
+  if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 1 ) )
+    nl_error(3, "curl_easy_setup(CURLOPT_VERBOSE) failed\n");
 }
 
 curl_obj::~curl_obj() {
+  if ( req_url ) free((void *)req_url);
   if (handle != 0) {
     curl_easy_cleanup(handle);
   }
@@ -102,7 +144,9 @@ size_t curl_obj::write_data(char *ptr, size_t size, size_t nmemb) {
 
 size_t curl_obj::log_write_data(char *ptr, size_t size, size_t nmemb) {
   size_t rv = write_data(ptr, size, nmemb);
-  if ( llvl ) {} // ###
+  if ( llvl >= CT_LOG_BODIES ) {
+    fwrite( ptr, size, nmemb, req_data_log );
+  }
   return rv;
 }
 
@@ -176,6 +220,10 @@ void curl_obj::set_log_level(curl_log_level_t lvl) {
 void curl_obj::set_url(const char *url) {
   if ( curl_easy_setopt(handle, CURLOPT_URL, url) )
     nl_error(3, "FATAL: curl_easy_setup(CURLOPT_URL, '%s') failed\n", url);
+  if ( req_url ) {
+    free((void*)req_url);
+  }
+  req_url = strdup(url);
 }
 
 void curl_obj::perform(const char *req_desc) {
@@ -235,6 +283,9 @@ void curl_obj::perform(const char *req_desc) {
     } else {
       fprintf( req_summary, "<td>%s</td>", req_type );
     }
+    if (req_url)
+      fprintf( req_summary, "<td><a href=\"%s\">%s</a></td>", req_url, req_url );
+    else fprintf( req_summary, "<td></td>" );
     if ( llvl >= CT_LOG_BODIES )
       fprintf( req_summary, "<td><a href=\"req%02d_body.html\">%s</a></td>", req_num, req_desc );
     else
@@ -258,8 +309,8 @@ void curl_obj::transaction_start(const char *desc) {
       snprintf(tdir+n, 80-n, "/index.html" );
       req_summary = create_html_log( tdir, "Transaction Request Summary");
       fprintf( req_summary, "%s",
-        "<table>\n<tr><th>start time</th><th>duration</th>"
-        "<th>method</th><th>Description</th><th>status</th></tr>\n" );
+        "<table>\n<tr><th>Start</th><th>Dur</th>"
+        "<th>Method</th><th>URL</th><th>Description</th><th>status</th></tr>\n" );
     }
   }
   trans_desc = strdup(desc);
