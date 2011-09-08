@@ -122,12 +122,10 @@ curl_obj::curl_obj() {
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_WRITEDATA, this ) )
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEDATA) failed\n");
-  if ( curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, &swrite_header) )
-    nl_error(3, "curl_easy_setup(CURLOPT_HEADERFUNCTION) failed\n");
-  if ( curl_easy_setopt(handle, CURLOPT_HEADERDATA, this ) )
-    nl_error(3, "curl_easy_setup(CURLOPT_HEADERDATA) failed\n");
-  if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 1 ) )
-    nl_error(3, "curl_easy_setup(CURLOPT_VERBOSE) failed\n");
+  //if ( curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, &swrite_header) )
+  //  nl_error(3, "curl_easy_setup(CURLOPT_HEADERFUNCTION) failed\n");
+  //if ( curl_easy_setopt(handle, CURLOPT_HEADERDATA, this ) )
+  //  nl_error(3, "curl_easy_setup(CURLOPT_HEADERDATA) failed\n");
 }
 
 curl_obj::~curl_obj() {
@@ -212,6 +210,30 @@ size_t curl_obj::swrite_header(char *ptr, size_t size, size_t nmemb, void *userd
   return co->log_write_header(ptr, size, nmemb);
 }
 
+void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
+  if ( req_hdr_log ) {
+    const char *typestr;
+    switch (type) {
+      case CURLINFO_TEXT: typestr = "*"; break;
+      case CURLINFO_HEADER_OUT: typestr = "&gt;"; break;
+      case CURLINFO_HEADER_IN: typestr = "&lt;"; break;
+      case CURLINFO_DATA_IN: return;
+      case CURLINFO_DATA_OUT: return;
+      default: typestr = "?"; break;
+    }
+    fprintf( req_hdr_log, "<tr><td>%s</td><td><pre>", typestr );
+    fwrite( s, 1, size, req_hdr_log );
+    fprintf( req_hdr_log, "</pre></td></tr>\n" );
+    fflush( req_hdr_log );
+  }
+}
+
+int curl_obj::debug_callback(CURL *handle, curl_infotype type, char *str, size_t size, void *userdata) {
+  curl_obj *co = (curl_obj *)userdata;
+  co->debug_info(type, str, size);
+  return 0;
+}
+
 void curl_obj::set_log_level(curl_log_level_t lvl) {
   nl_assert(!transaction_started);
   llvl = lvl;
@@ -219,7 +241,7 @@ void curl_obj::set_log_level(curl_log_level_t lvl) {
 
 void curl_obj::set_url(const char *url) {
   if ( curl_easy_setopt(handle, CURLOPT_URL, url) )
-    nl_error(3, "FATAL: curl_easy_setup(CURLOPT_URL, '%s') failed\n", url);
+    nl_error(3, "FATAL: curl_easy_setopt(CURLOPT_URL, '%s') failed", url);
   if ( req_url ) {
     free((void*)req_url);
   }
@@ -230,6 +252,10 @@ void curl_obj::perform(const char *req_desc) {
   if (llvl >= CT_LOG_HEADERS) {
     char fname[80];
     char title[80];
+    if ( curl_easy_setopt( handle, CURLOPT_DEBUGFUNCTION, &debug_callback ) ||
+         curl_easy_setopt( handle, CURLOPT_DEBUGDATA, this ) ||
+         curl_easy_setopt( handle, CURLOPT_VERBOSE, 1 ) )
+      nl_error( 3, "FATAL: curl_easy_setopt(CURLOPT_DEBUGFUNCTION or _VERBOSE) failed" );
     snprintf( fname, 80, "%s/%02d/req%02d_hdrs.html",
       global->trans_dir, trans_num, req_num );
     snprintf( title, 80, "Request Headers %02d/%02d", trans_num, req_num );
@@ -244,14 +270,11 @@ void curl_obj::perform(const char *req_desc) {
     } else {
       fprintf( req_hdr_log, "[body]</p>\n" );
     }
-    fprintf( req_hdr_log, "<h2>Request headers</h2>\n"
-      "<table><tr><th>Header</th><th>Value</th></tr>\n" );
-    // ### Need to extract the request headers from handle
-    fprintf( req_hdr_log, "</table>\n" );
-    
-    // Then get ready to handle the response headers
-    fprintf( req_hdr_log, "<h2>Response Headers</h2>\n<table>\n"
-      "<tr><th>Header</th><th>Value</th></tr>\n" );
+    fprintf( req_hdr_log,
+      "<table>\n<tr><th>Type</th><th>Text</th></tr>\n" );
+    fflush( req_hdr_log );
+  } else if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 0) ) {
+    nl_error( 3, "FATAL: error clearing verbose" );
   }
   if (llvl >= CT_LOG_BODIES) {
     char fname[80];

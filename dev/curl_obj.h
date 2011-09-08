@@ -49,6 +49,10 @@ class curl_obj {
     size_t log_write_header(char *ptr, size_t size, size_t nmemb);
     /** Calls log_header() */
     static size_t swrite_header(char *ptr, size_t size, size_t nmemb, void *userdata);
+    /** Method for logging header info */
+    void debug_info( curl_infotype type, char *s, size_t size );
+    /** C callback for debug header info. Calls debug_info() */
+    static int debug_callback(CURL *, curl_infotype, char *, size_t, void *);
     FILE *create_html_log( const char *fname, const char *title );
     FILE *close_html_log(FILE *fp);
     void print_times( FILE *fp, time_t stime, time_t etime );
