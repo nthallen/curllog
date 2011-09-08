@@ -43,12 +43,6 @@ class curl_obj {
     size_t log_write_data(char *ptr, size_t size, size_t nmemb);
     /** Calls log_write_data() */
     static size_t swrite_data(char *ptr, size_t size, size_t nmemb, void *userdata);
-    /** Log the header */
-    virtual size_t write_header(char *ptr, size_t size, size_t nmemb);
-    /** Parse and log the header and then call write_header() */
-    size_t log_write_header(char *ptr, size_t size, size_t nmemb);
-    /** Calls log_header() */
-    static size_t swrite_header(char *ptr, size_t size, size_t nmemb, void *userdata);
     /** Method for logging header info */
     void debug_info( curl_infotype type, char *s, size_t size );
     /** C callback for debug header info. Calls debug_info() */

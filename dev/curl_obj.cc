@@ -1,4 +1,5 @@
 #include <sys/stat.h>
+#include <libxml/HTMLparser.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -153,66 +154,10 @@ size_t curl_obj::swrite_data(char *ptr, size_t size, size_t nmemb, void *userdat
   return co->log_write_data(ptr, size, nmemb);
 }
 
-/** virtual function if app needs to see headers */
-size_t curl_obj::write_header(char *ptr, size_t size, size_t nmemb) {
-  return size*nmemb;
-}
-
-/** Parses the headers looking for status, maybe more, and logs headers as necessary */
-size_t curl_obj::log_write_header(char *ptr, size_t size, size_t nmemb) {
-  size_t len = size*nmemb;
-  size_t colon;
-  const char *hdr, *val;
-  size_t hdrlen, vallen;
-  while ( len > 0 && isspace(ptr[len-1]) ) --len;
-  for ( colon = 0; colon < len && ptr[colon] != ':'; ++colon ) ;
-  if ( colon == len ) {
-    // could be a blank line or 'HTTP/[\d.]+ \d+ .*'
-    if ( len > 0 ) {
-      if ( strncmp(ptr, "HTTP/", 5) == 0 ) {
-        for (colon = 5; colon < len && !isspace(ptr[colon]); ++colon);
-        hdr = ptr;
-        hdrlen = colon;
-        if ( ! isspace(ptr[colon]) )
-          nl_error(1, "Expected space after HTTP/" );
-        while (isspace(ptr[colon]) && colon < len) ++colon;
-        val = ptr+colon;
-        vallen = len - colon;
-        if ( colon < len && isdigit(ptr[colon]) ) {
-          req_status = atoi(val);
-        } else {
-          nl_error(1, "Expected digit after HTTP/" );
-        }
-      } else {
-        nl_error(1, "Unrecognized header: %*.*s", len, len, ptr);
-        hdr = "";
-        hdrlen = 0;
-        val = ptr;
-        vallen = len;
-      }
-    }
-  } else {
-    hdr = ptr;
-    hdrlen = colon++;
-    while (colon < len && isspace(ptr[colon]) ) ++colon;
-    val = ptr+colon;
-    vallen = len - colon;
-  }
-  if ( len > 0 && llvl >= CT_LOG_HEADERS ) {
-    fprintf( req_hdr_log, "<tr><td>%*.*s</td><td>%*.*s</td></tr>\n",
-      hdrlen, hdrlen, hdr, vallen, vallen, val );
-  }
-  return write_header(ptr, size, nmemb);
-}
-
-size_t curl_obj::swrite_header(char *ptr, size_t size, size_t nmemb, void *userdata) {
-  curl_obj *co = (curl_obj *)userdata;
-  return co->log_write_header(ptr, size, nmemb);
-}
-
 void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
   if ( req_hdr_log ) {
     const char *typestr;
+    unsigned i;
     switch (type) {
       case CURLINFO_TEXT: typestr = "*"; break;
       case CURLINFO_HEADER_OUT: typestr = "&gt;"; break;
@@ -221,10 +166,27 @@ void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
       case CURLINFO_DATA_OUT: return;
       default: typestr = "?"; break;
     }
-    fprintf( req_hdr_log, "<tr><td>%s</td><td><pre>", typestr );
-    fwrite( s, 1, size, req_hdr_log );
-    fprintf( req_hdr_log, "</pre></td></tr>\n" );
-    fflush( req_hdr_log );
+    for ( i = 0; i < size; ) {
+      unsigned j;
+      int inlen, outlen, rv;
+      unsigned char escaped[256];
+
+      for ( j = i; j < size; ++j ) {
+        if ( s[j] == '\r' || s[j] == '\n' ) break;
+      }
+      inlen = j-i;
+      outlen = 255;
+      rv = htmlEncodeEntities( escaped, &outlen, (unsigned char *)(s+i), &inlen, 0 );
+      if ( rv ) {
+        inlen = j-i;
+        nl_error( 2, "htmlEncodeEntities() choked on '%*.*s'", inlen, inlen, s+i );
+        return;
+      }
+      escaped[outlen] = '\0';
+      fprintf( req_hdr_log, "<tr><td>%s</td><td>%s</td></tr>\n", typestr, escaped );
+      while ( j < size && ( s[j] == '\r' || s[j] == '\n') ) ++j;
+      i = j;
+    }
   }
 }
 
@@ -272,7 +234,7 @@ void curl_obj::perform(const char *req_desc) {
     }
     fprintf( req_hdr_log,
       "<table>\n<tr><th>Type</th><th>Text</th></tr>\n" );
-    fflush( req_hdr_log );
+    // fflush( req_hdr_log );
   } else if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 0) ) {
     nl_error( 3, "FATAL: error clearing verbose" );
   }
