@@ -45,18 +45,8 @@ curl_global::~curl_global() {
     FILE *fp, *ifp;
     char fname[80];
     snprintf(fname, 80, "%s/index.html", trans_dir);
-    fp = fopen(fname, "w");
-    if ( fp == NULL ) nl_error(3, "FATAL: Unable to open index '%s'\n", fname );
-    fprintf( fp, "%s",
-      "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n"
-      "  \"http://www.w3.org/TR/html4/strict.dtd\">\n"
-      "<HTML>\n"
-      "<HEAD>\n"
-      "  <TITLE>Transaction Log</TITLE>\n"
-      "</HEAD>\n"
-      "<BODY>\n" );
-    fprintf( fp, "<h1>Transaction Log</h1>\n" );
-    fprintf( fp, "<table>\n<tr><th>Start Time</th><th>Dur</th>"
+    fp = curl_obj::create_html_log( fname, "Transaction Log" );
+    fprintf( fp, "<table id=\"TransIdx\">\n<tr><th>Start Time</th><th>Dur</th>"
         "<th>Transaction</th><th>Status</th></tr>\n" );
     while ( --next_trans >= 0 ) {
       snprintf( fname, 80, "%s/%02d/summary.txt", trans_dir, next_trans );
@@ -78,6 +68,8 @@ curl_global::~curl_global() {
         fprintf(fp, "<tr><td colspan=\"4\">Missing</td></tr>\n" );
       }
     }
+    fprintf( fp, "</table>\n" );
+    curl_obj::close_html_log(fp);
   }
   curl_global_cleanup();
 }
@@ -123,10 +115,6 @@ curl_obj::curl_obj() {
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_WRITEDATA, this ) )
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEDATA) failed\n");
-  //if ( curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, &swrite_header) )
-  //  nl_error(3, "curl_easy_setup(CURLOPT_HEADERFUNCTION) failed\n");
-  //if ( curl_easy_setopt(handle, CURLOPT_HEADERDATA, this ) )
-  //  nl_error(3, "curl_easy_setup(CURLOPT_HEADERDATA) failed\n");
 }
 
 curl_obj::~curl_obj() {
@@ -156,15 +144,15 @@ size_t curl_obj::swrite_data(char *ptr, size_t size, size_t nmemb, void *userdat
 
 void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
   if ( req_hdr_log ) {
-    const char *typestr;
+    const char *typestr, *class_str;
     unsigned i;
     switch (type) {
-      case CURLINFO_TEXT: typestr = "*"; break;
-      case CURLINFO_HEADER_OUT: typestr = "&gt;"; break;
-      case CURLINFO_HEADER_IN: typestr = "&lt;"; break;
+      case CURLINFO_TEXT: typestr = "*"; class_str = "info"; break;
+      case CURLINFO_HEADER_OUT: typestr = "&gt;"; class_str = "reqhdr"; break;
+      case CURLINFO_HEADER_IN: typestr = "&lt;"; class_str = "resphdr"; break;
       case CURLINFO_DATA_IN: return;
       case CURLINFO_DATA_OUT: return;
-      default: typestr = "?"; break;
+      default: typestr = "?"; class_str = "unknown"; break;
     }
     for ( i = 0; i < size; ) {
       unsigned j;
@@ -183,7 +171,8 @@ void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
         return;
       }
       escaped[outlen] = '\0';
-      fprintf( req_hdr_log, "<tr><td>%s</td><td>%s</td></tr>\n", typestr, escaped );
+      fprintf( req_hdr_log, "<tr class=\"%s\"><td>%s</td><td>%s</td></tr>\n",
+              class_str, typestr, escaped );
       while ( j < size && ( s[j] == '\r' || s[j] == '\n') ) ++j;
       i = j;
     }
@@ -233,8 +222,7 @@ void curl_obj::perform(const char *req_desc) {
       fprintf( req_hdr_log, "[body]</p>\n" );
     }
     fprintf( req_hdr_log,
-      "<table>\n<tr><th>Type</th><th>Text</th></tr>\n" );
-    // fflush( req_hdr_log );
+      "<table id=\"Headers\">\n<tr><th>Type</th><th>Text</th></tr>\n" );
   } else if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 0) ) {
     nl_error( 3, "FATAL: error clearing verbose" );
   }
@@ -330,22 +318,31 @@ void curl_obj::transaction_end() {
 
 FILE *curl_obj::create_html_log( const char *fname, const char *title ) {
   FILE *fp = fopen(fname, "w");
+  const char *s;
   if ( fp == NULL ) nl_error(3, "FATAL: Unable to open html log '%s'\n", fname );
   fprintf( fp, "%s%s%s",
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n"
     "  \"http://www.w3.org/TR/html4/strict.dtd\">\n"
-    "<HTML>\n"
-    "<HEAD>\n"
-    "  <TITLE>", title, "</TITLE>\n"
-    "</HEAD>\n"
-    "<BODY>\n" );
+    "<html>\n"
+    "<head>\n"
+    "  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n"
+    "  <title>", title, "</title>\n"
+    "  <link href=\"" );
+  for ( s = fname; *s; ++s ) {
+    if ( *s == '/' )
+      fprintf( fp, "../" );
+  }
+  fprintf( fp,
+    "curltest.css\" rel=\"stylesheet\" type=\"text/css\">\n"
+    "</head>\n"
+    "<body>\n" );
   fprintf( fp, "<h1>%s</h1>\n", title );
   return fp;
 }
 
 FILE *curl_obj::close_html_log(FILE *fp) {
   fprintf( fp, "%s",
-    "</BODY>\n</HTML>\n" );
+    "</body>\n</html>\n" );
   return NULL;
 }
 

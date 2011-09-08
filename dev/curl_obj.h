@@ -47,8 +47,6 @@ class curl_obj {
     void debug_info( curl_infotype type, char *s, size_t size );
     /** C callback for debug header info. Calls debug_info() */
     static int debug_callback(CURL *, curl_infotype, char *, size_t, void *);
-    FILE *create_html_log( const char *fname, const char *title );
-    FILE *close_html_log(FILE *fp);
     void print_times( FILE *fp, time_t stime, time_t etime );
   public:
     curl_obj();
@@ -58,6 +56,8 @@ class curl_obj {
     void perform(const char *req_desc);
     void transaction_start(const char *desc);
     void transaction_end();
+    static FILE *create_html_log( const char *fname, const char *title );
+    static FILE *close_html_log(FILE *fp);
 };
 
 #endif
