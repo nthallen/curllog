@@ -1,5 +1,6 @@
 #include <sys/stat.h>
 #include <libxml/HTMLparser.h>
+#include <libxml/HTMLtree.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -108,8 +109,11 @@ curl_obj::curl_obj() {
   req_status = 0;
   req_url = NULL;
   req_summary = NULL;
-  req_data_log = NULL;
+  // req_data_log = NULL;
   req_hdr_log = NULL;
+  parse_requested = 0;
+  parsing = 0;
+  parser = NULL;
   nl_assert(handle != 0);
   if ( curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &swrite_data) )
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
@@ -119,6 +123,14 @@ curl_obj::curl_obj() {
 
 curl_obj::~curl_obj() {
   if ( req_url ) free((void *)req_url);
+  if ( parser ) {
+    if ( parser->myDoc ) {
+      xmlFreeDoc(parser->myDoc);
+      parser->myDoc = 0;
+    }
+    htmlFreeParserCtxt(parser);
+    parser = 0;
+  }
   if (handle != 0) {
     curl_easy_cleanup(handle);
   }
@@ -130,10 +142,35 @@ size_t curl_obj::write_data(char *ptr, size_t size, size_t nmemb) {
 }
 
 size_t curl_obj::log_write_data(char *ptr, size_t size, size_t nmemb) {
-  size_t rv = write_data(ptr, size, nmemb);
-  if ( llvl >= CT_LOG_BODIES ) {
-    fwrite( ptr, size, nmemb, req_data_log );
+  size_t rv;
+  if ( llvl >= CT_LOG_BODIES || parse_requested ) {
+    if ( req_nbytes == 0 ) {
+      char *ctype;
+      CURLcode cc;
+      cc = curl_easy_getinfo(handle, CURLINFO_CONTENT_TYPE, &ctype);
+      if ( cc == 0 ) {
+        if ( ctype != NULL && strcmp( ctype, "text/html" ) == 0 ) {
+          if ( parser ) {
+            htmlCtxtReset(parser);
+          } else {
+            // Set up parser context
+            parser = htmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL, XML_CHAR_ENCODING_NONE);
+            nl_assert(parser);
+          }
+          parsing = 1;
+        } else if (ctype == NULL) {
+          nl_error( 1, "No Content-type found" );
+        } else {
+          nl_error( 1, "Unexpected Content-type: '%s'", ctype );
+        }
+      }
+    }
+    if ( parsing ) {
+      htmlParseChunk(parser, ptr, size*nmemb, 0);
+    }
   }
+  req_nbytes += size*nmemb;
+  rv = write_data(ptr, size, nmemb);
   return rv;
 }
 
@@ -226,24 +263,25 @@ void curl_obj::perform(const char *req_desc) {
   } else if ( curl_easy_setopt(handle, CURLOPT_VERBOSE, 0) ) {
     nl_error( 3, "FATAL: error clearing verbose" );
   }
-  if (llvl >= CT_LOG_BODIES) {
-    char fname[80];
-    snprintf( fname, 80, "%s/%02d/req%02d_body.html",
-      global->trans_dir, trans_num, req_num );
-    req_data_log = fopen( fname, "w" );
-    nl_assert( req_data_log != NULL );
-  }
+  req_nbytes = 0;
   req_start = time(NULL);
   if ( curl_easy_perform(handle) )
-    nl_error(3, "FATAL: curl_easy_perform() failed\n");
+    nl_error(1, "WARN: curl_easy_perform() failed\n");
   req_end = time(NULL);
+  { long resp_code;
+    curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &resp_code);
+    req_status = resp_code;
+  }
   if (llvl >= CT_LOG_HEADERS) {
     // Close the response header table
     fprintf( req_hdr_log, "</table>\n" );
     req_hdr_log = close_html_log(req_hdr_log);
   }
-  if (llvl >= CT_LOG_BODIES) {
-    fclose( req_data_log );
+  if (llvl >= CT_LOG_BODIES && parsing) {
+    char fname[80];
+    snprintf( fname, 80, "%s/%02d/req%02d_body.html",
+      global->trans_dir, trans_num, req_num );
+    htmlSaveFile(fname, parser->myDoc);
   }
   if (llvl >= CT_LOG_TRANSACTIONS) {
     const char *req_type = "GET";
