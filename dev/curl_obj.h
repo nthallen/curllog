@@ -4,6 +4,8 @@
 #include <libxml/HTMLparser.h>
 #include "curl/curl.h"
 
+class curl_form;
+
 class curl_global {
   private:
     curl_global();
@@ -57,16 +59,44 @@ class curl_obj {
     /** C callback for debug header info. Calls debug_info() */
     static int debug_callback(CURL *, curl_infotype, char *, size_t, void *);
     void print_times( FILE *fp, time_t stime, time_t etime );
+    int add_base( xmlNodePtr xp, const char *url );
+    curl_form *find_form_int( xmlNodePtr xp, int n );
   public:
+    const char *method;
     curl_obj();
     ~curl_obj();
     void set_log_level(curl_log_level_t lvl);
     void set_url(const char *url);
+    void set_postfields(const char *text, int field_size);
     void perform(const char *req_desc);
     void transaction_start(const char *desc);
     void transaction_end();
-    static FILE *create_html_log( const char *fname, const char *title );
+    curl_form *find_form(int n);
+    xmlNodePtr get_parse_tree();
+    const char *relative_url( const char *href );
+    static FILE *create_html_log( const char *fname, const char *title, ... );
     static FILE *close_html_log(FILE *fp);
+};
+
+class curl_form {
+  private:
+    curl_obj *co;
+    xmlNodePtr form;
+    char *submit_buf;
+    int submit_buf_size;
+    int submit_size;
+    int need_amp;
+    void realloc_submit();
+    void append_to_submit( const char *text );
+    void quote_to_submit( const char *text );
+    void append_pair_to_submit( const char *nm, const char *val );
+    int set( xmlNodePtr xp, const char *name, const char *value );
+    void submit_int(xmlNodePtr xp);
+  public:
+    curl_form(curl_obj *co, xmlNodePtr top);
+    ~curl_form();
+    void set( const char *name, const char *value );
+    void submit( const char *desc, const char *name, const char *value );
 };
 
 #endif

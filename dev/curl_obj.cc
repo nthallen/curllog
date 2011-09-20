@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <ctype.h>
 #include "curl_obj.h"
 #include "nl_assert.h"
@@ -114,6 +115,7 @@ curl_obj::curl_obj() {
   parse_requested = 0;
   parsing = 0;
   parser = NULL;
+  method = "GET";
   nl_assert(handle != 0);
   if ( curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &swrite_data) )
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
@@ -149,14 +151,14 @@ size_t curl_obj::log_write_data(char *ptr, size_t size, size_t nmemb) {
       CURLcode cc;
       cc = curl_easy_getinfo(handle, CURLINFO_CONTENT_TYPE, &ctype);
       if ( cc == 0 ) {
-        if ( ctype != NULL && strcmp( ctype, "text/html" ) == 0 ) {
+        if ( ctype != NULL && strncmp( ctype, "text/html", 9 ) == 0 ) {
           if ( parser ) {
             htmlCtxtReset(parser);
-          } else {
-            // Set up parser context
-            parser = htmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL, XML_CHAR_ENCODING_NONE);
-            nl_assert(parser);
+            htmlFreeParserCtxt(parser);
           }
+          // Set up parser context
+          parser = htmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL, XML_CHAR_ENCODING_NONE);
+          nl_assert(parser);
           parsing = 1;
         } else if (ctype == NULL) {
           nl_error( 1, "No Content-type found" );
@@ -234,6 +236,16 @@ void curl_obj::set_url(const char *url) {
     free((void*)req_url);
   }
   req_url = strdup(url);
+  if ( curl_easy_setopt(handle, CURLOPT_HTTPGET, 1L) )
+    nl_error(3, "FATAL: curl_easy_setopt(CURLOPT_HTTPGET) failed" );
+  method = "GET";
+}
+
+void curl_obj::set_postfields(const char *text, int tsize ) {
+  if (curl_easy_setopt(handle, CURLOPT_POSTFIELDS, text) ||
+      curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, tsize ) )
+    nl_error(3, "curl_easy_setopt() failed on POSTFIELDS or POSTFIELDSIZE" );
+  method = "POST";
 }
 
 void curl_obj::perform(const char *req_desc) {
@@ -277,30 +289,29 @@ void curl_obj::perform(const char *req_desc) {
     fprintf( req_hdr_log, "</table>\n" );
     req_hdr_log = close_html_log(req_hdr_log);
   }
-  if (llvl >= CT_LOG_BODIES && parsing) {
-    char fname[80];
-    snprintf( fname, 80, "%s/%02d/req%02d_body.html",
-      global->trans_dir, trans_num, req_num );
-    htmlSaveFile(fname, parser->myDoc);
-  }
   if (llvl >= CT_LOG_TRANSACTIONS) {
-    const char *req_type = "GET";
     // Write request summary to req_summary
     print_times( req_summary, req_start, req_end );
     if ( llvl >= CT_LOG_HEADERS ) {
       fprintf( req_summary,
         "<td><a href=\"req%02d_hdrs.html\">%s</a></td>",
-        req_num, req_type );
+        req_num, method );
     } else {
-      fprintf( req_summary, "<td>%s</td>", req_type );
+      fprintf( req_summary, "<td>%s</td>", method );
     }
     if (req_url)
       fprintf( req_summary, "<td><a href=\"%s\">%s</a></td>", req_url, req_url );
     else fprintf( req_summary, "<td></td>" );
-    if ( llvl >= CT_LOG_BODIES )
+    if ( llvl >= CT_LOG_BODIES && parsing ) {
+      char fname[80];
+      snprintf( fname, 80, "%s/%02d/req%02d_body.html",
+        global->trans_dir, trans_num, req_num );
+      add_base( xmlDocGetRootElement(parser->myDoc), req_url );
+      htmlSaveFile(fname, parser->myDoc);
       fprintf( req_summary, "<td><a href=\"req%02d_body.html\">%s</a></td>", req_num, req_desc );
-    else
+    } else {
       fprintf( req_summary, "<td>%s</td>", req_desc );
+    }
     fprintf( req_summary, "<td>%d</td></tr>\n", req_status ); // Use status of last request
   }
   ++req_num;
@@ -318,8 +329,9 @@ void curl_obj::transaction_start(const char *desc) {
       if (mkdir( tdir, 0666) == -1 )
         nl_error(3, "FATAL: Error creating transaction directory %s\n", tdir);
       snprintf(tdir+n, 80-n, "/index.html" );
-      req_summary = create_html_log( tdir, "Transaction Request Summary");
+      req_summary = create_html_log( tdir, "Transaction %d Request Summary", trans_num);
       fprintf( req_summary, "%s",
+        "<p>[<a href=\"../index.html\">Transaction Index</a>]</p>\n"
         "<table>\n<tr><th>Start</th><th>Dur</th>"
         "<th>Method</th><th>URL</th><th>Description</th><th>status</th></tr>\n" );
     }
@@ -354,9 +366,16 @@ void curl_obj::transaction_end() {
   transaction_started = 0;
 }
 
-FILE *curl_obj::create_html_log( const char *fname, const char *title ) {
-  FILE *fp = fopen(fname, "w");
+FILE *curl_obj::create_html_log( const char *fname, const char *title, ... ) {
+  FILE *fp;
+  va_list arg;
+  char ftitle[80];
   const char *s;
+
+  va_start(arg, title);
+  vsnprintf(ftitle, 79, title, arg );
+  va_end(arg);
+  fp = fopen(fname, "w");
   if ( fp == NULL ) nl_error(3, "FATAL: Unable to open html log '%s'\n", fname );
   fprintf( fp, "%s%s%s",
     "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n"
@@ -364,7 +383,7 @@ FILE *curl_obj::create_html_log( const char *fname, const char *title ) {
     "<html>\n"
     "<head>\n"
     "  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n"
-    "  <title>", title, "</title>\n"
+    "  <title>", ftitle, "</title>\n"
     "  <link href=\"" );
   for ( s = fname; *s; ++s ) {
     if ( *s == '/' )
@@ -374,7 +393,7 @@ FILE *curl_obj::create_html_log( const char *fname, const char *title ) {
     "curltest.css\" rel=\"stylesheet\" type=\"text/css\">\n"
     "</head>\n"
     "<body>\n" );
-  fprintf( fp, "<h1>%s</h1>\n", title );
+  fprintf( fp, "<h1>%s</h1>\n", ftitle );
   return fp;
 }
 
@@ -389,4 +408,238 @@ void curl_obj::print_times( FILE *fp, time_t stime, time_t etime ) {
   double dur = difftime( etime, stime );
   strftime(tbuf, 80, "%H:%M:%S", localtime(&stime) );
   fprintf( fp, "<tr><td>%s</td><td>%.0lf</td>", tbuf, dur );
+}
+
+/** Recursively looks for <head> node and adds a <base> element.
+  * @return non-zero when the deed is done.
+  */
+int curl_obj::add_base( xmlNodePtr xp, const char *url ) {
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && stricmp((const char *)xp->name, "head") == 0 ) {
+      xmlNodePtr bp = xmlNewDocNode( xp->doc, NULL, (const xmlChar *)"base", NULL );
+      xmlNewProp(bp, (const xmlChar *)"href", (const xmlChar *)url);
+      if ( xp->children ) {
+        xmlAddPrevSibling(xp->children, bp);
+      } else {
+        xmlAddChild(xp, bp);
+      }
+      return 1;
+    }
+    if ( add_base( xp->children, url ) )
+      return 1;
+  }
+  return 0;
+}
+
+xmlNodePtr curl_obj::get_parse_tree() {
+  return parser ? xmlDocGetRootElement(parser->myDoc) : NULL;
+}
+
+curl_form *curl_obj::find_form_int( xmlNodePtr xp, int n ) {
+  curl_form *rv;
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && stricmp((const char *)xp->name, "form") == 0 ) {
+      if ( --n <= 0 ) return new curl_form( this, xp );
+      // Don't need to go through form's children.
+    } else {
+      rv = find_form_int( xp->children, n );
+      if ( rv ) return rv;
+    }
+  }
+  return NULL;
+}
+
+const char *curl_obj::relative_url( const char *href ) {
+  // If href begins with a protocol (e.g. http:) then use the whole thing,
+  // else get the protocol from base.
+  // If href starts with /, then use the rest of it,
+  // otherwise copy base up until the last slasy, then copy the rest
+  // of href.
+  static char *rel_url = 0;
+  static int rel_url_size = 0;
+  const char *s, *endpt;
+  int new_size, base_size;
+  
+  if (href == 0 || *href == '\0') {
+    if ( req_url == 0 || *req_url == '\0' )
+      nl_error( 3, "No base URL defined in relative_url" );
+    return (const char *)req_url;
+  }
+  if (isalpha(*href)) {
+    for ( s = href; isalpha(*s); ++s );
+    if ( *s == ':' ) return href;
+  }
+  s = req_url;
+  endpt = s;
+  if (isalpha(*s)) {
+    while (isalpha(*s)) ++s;
+    if ( *s == ':' )
+      endpt = ++s;
+  }
+  if ( endpt == req_url )
+    nl_error(3, "Base URL '%s' has no protocol", req_url);
+  if ( href[0] != '/' || href[1] != '/' ) {
+    // Need to get host from base URL
+    if ( s[0] != '/' || s[1] != '/' )
+      nl_error(3, "Base URL '%s' has no host", req_url);
+    s += 2;
+    if ( *s == '\0' || *s == '/' )
+      nl_error(3, "Base URL '%s' has degenerate host", req_url);
+    while ( *s != '\0' && *s != '/' ) ++s;
+    endpt = s;
+  }
+  if ( *href != '/' ) {
+    while ( *s != '\0' ) {
+      if ( *s++ == '/' ) {
+        endpt = s;
+      }
+    }
+  }
+  // Now I'll take req_url up to but not including endpt and all of href
+  base_size = endpt-req_url;
+  new_size = base_size + strlen(href) + 1;
+  if ( rel_url_size < new_size ) {
+    rel_url = (char *)realloc( rel_url, new_size );
+    rel_url_size = new_size;
+    if ( rel_url == NULL )
+      nl_error(4, "Out of memory in relative_url()" );
+  }
+  strncpy( rel_url, req_url, base_size );
+  strcpy( rel_url+base_size, href );
+  return (const char *)rel_url;
+}
+
+curl_form *curl_obj::find_form(int n) {
+  return parser ? find_form_int(xmlDocGetRootElement(parser->myDoc), n) : NULL;
+}
+
+curl_form::curl_form(curl_obj *co_in, xmlNodePtr top) {
+  co = co_in;
+  form = top;
+  submit_buf = 0;
+  submit_buf_size = 0;
+  submit_size = 0;
+}
+
+curl_form::~curl_form() {
+}
+
+/**
+ * @return true if the element is found and updated.
+ */
+int curl_form::set( xmlNodePtr xp, const char *name, const char *value ) {
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+      if ( nm != 0 && strcmp(nm, name) == 0 ) {
+        xmlSetProp(xp, (const xmlChar *)"value", (const xmlChar *)value );
+        return 1;
+      }
+    }
+    if ( set(xp->children, name, value) )
+      return 1;
+  }
+  return 0;
+}
+
+void curl_form::set( const char *name, const char *value ) {
+  if ( ! set( form, name, value ) ) {
+    // Need to add an input element with name and value
+    xmlNodePtr field = xmlNewChild(form, NULL, (const xmlChar *) "input", NULL);
+    xmlNewProp(field, (const xmlChar *)"name", (const xmlChar *)name );
+    xmlNewProp(field, (const xmlChar *)"value", (const xmlChar *)value );
+  }
+}
+
+void curl_form::realloc_submit() {
+  submit_buf_size = submit_buf_size ? 2*submit_buf_size : 1024;
+  submit_buf = (char *)realloc(submit_buf, submit_buf_size);
+  if ( submit_buf == NULL )
+    nl_error( 3, "Out of memory in curl_form::append_to_submit()" );
+}
+
+void curl_form::quote_to_submit( const char *text ) {
+  const char *s = text;
+  while (s != NULL && *s != '\0') {
+    int outlen = submit_buf_size - submit_size;
+    if (outlen == 0) {
+      realloc_submit();
+    } else {
+      int inlen = strlen(s);
+      int rv = htmlEncodeEntities( (unsigned char *)submit_buf + submit_size, &outlen,
+        (unsigned char *)s, &inlen, 0 );
+      switch (rv) {
+        case 0:
+          submit_size += outlen;
+          s += inlen;
+          if (*s != '\0')
+            realloc_submit();
+          break;
+        default:
+          nl_error(3, "htmlEncodeEntities returned %d on '%s'", rv, text );
+      }
+    }
+  }
+  submit_buf[submit_size] = '\0';
+}
+
+void curl_form::append_to_submit( const char *text ) {
+  int newlen = strlen(text);
+  while ( submit_size + newlen >= submit_buf_size ) {
+    realloc_submit();
+  }
+  strcpy(submit_buf+submit_size, text);
+  submit_size += newlen;
+}
+
+void curl_form::append_pair_to_submit( const char *nm, const char *val ) {
+  if (need_amp) append_to_submit("&");
+  else need_amp = 1;
+  quote_to_submit(nm);
+  append_to_submit("=");
+  quote_to_submit(val);
+}
+
+void curl_form::submit_int(xmlNodePtr xp) {
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+      const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
+      const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
+      if ( typ == NULL || stricmp(typ, "submit") != 0 ) {
+        if ( nm == NULL ) {
+          nl_error(1, "Input with no name" );
+        } else if ( val != NULL ) {
+          nl_error(1, "Input %s=%s", nm, val );
+          append_pair_to_submit(nm, val);
+        }
+      }
+    }
+    submit_int(xp->children);
+  }
+}
+
+void curl_form::submit( const char *desc, const char *name, const char *value ) {
+  const char *method = (const char *)xmlGetProp(form, (const xmlChar *)"method");
+  const char *action = (const char *)xmlGetProp(form, (const xmlChar *)"action");
+  int is_post = 0;
+  submit_size = 0;
+  need_amp = 0;
+  action = co->relative_url(action);
+  if ( stricmp( method, "post" ) == 0 ) {
+    is_post = 1;
+  } else {
+    append_to_submit( action );
+    append_to_submit( "?" );
+  }
+  submit_int(form);
+  append_pair_to_submit( name, value );
+  if ( is_post ) {
+    co->set_url(action);
+    co->set_postfields(submit_buf, submit_size);
+  } else {
+    co->set_url(submit_buf);
+  }
+  nl_error(1, "Submit %s=%s", name, value);
+  co->perform(desc);
 }
