@@ -1,5 +1,4 @@
 #include <sys/stat.h>
-#include <libxml/HTMLparser.h>
 #include <libxml/HTMLtree.h>
 #include <errno.h>
 #include <string.h>
@@ -121,6 +120,8 @@ curl_obj::curl_obj() {
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_WRITEDATA, this ) )
     nl_error(3, "curl_easy_setup(CURLOPT_WRITEDATA) failed\n");
+  if ( curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L ) )
+    nl_error(3, "curl_easy_setup(CURLOPT_SSL_VERIFYPEER) failed\n");
 }
 
 curl_obj::~curl_obj() {
@@ -181,6 +182,9 @@ size_t curl_obj::swrite_data(char *ptr, size_t size, size_t nmemb, void *userdat
   return co->log_write_data(ptr, size, nmemb);
 }
 
+/**
+ * This is the CURLOPT_DEBUGFUNCTION non-static invocation.
+ */
 void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
   if ( req_hdr_log ) {
     const char *typestr, *class_str;
@@ -191,6 +195,8 @@ void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
       case CURLINFO_HEADER_IN: typestr = "&lt;"; class_str = "resphdr"; break;
       case CURLINFO_DATA_IN: return;
       case CURLINFO_DATA_OUT: return;
+      case CURLINFO_SSL_DATA_IN: return;
+      case CURLINFO_SSL_DATA_OUT: return;
       default: typestr = "?"; class_str = "unknown"; break;
     }
     for ( i = 0; i < size; ) {
@@ -218,6 +224,9 @@ void curl_obj::debug_info( curl_infotype type, char *s, size_t size ) {
   }
 }
 
+/**
+ * This is the CURLOPT_DEBUGFUNCTION
+ */
 int curl_obj::debug_callback(CURL *handle, curl_infotype type, char *str, size_t size, void *userdata) {
   curl_obj *co = (curl_obj *)userdata;
   co->debug_info(type, str, size);
@@ -511,135 +520,4 @@ const char *curl_obj::relative_url( const char *href ) {
 
 curl_form *curl_obj::find_form(int n) {
   return parser ? find_form_int(xmlDocGetRootElement(parser->myDoc), n) : NULL;
-}
-
-curl_form::curl_form(curl_obj *co_in, xmlNodePtr top) {
-  co = co_in;
-  form = top;
-  submit_buf = 0;
-  submit_buf_size = 0;
-  submit_size = 0;
-}
-
-curl_form::~curl_form() {
-}
-
-/**
- * @return true if the element is found and updated.
- */
-int curl_form::set( xmlNodePtr xp, const char *name, const char *value ) {
-  for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
-      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
-      if ( nm != 0 && strcmp(nm, name) == 0 ) {
-        xmlSetProp(xp, (const xmlChar *)"value", (const xmlChar *)value );
-        return 1;
-      }
-    }
-    if ( set(xp->children, name, value) )
-      return 1;
-  }
-  return 0;
-}
-
-void curl_form::set( const char *name, const char *value ) {
-  if ( ! set( form, name, value ) ) {
-    // Need to add an input element with name and value
-    xmlNodePtr field = xmlNewChild(form, NULL, (const xmlChar *) "input", NULL);
-    xmlNewProp(field, (const xmlChar *)"name", (const xmlChar *)name );
-    xmlNewProp(field, (const xmlChar *)"value", (const xmlChar *)value );
-  }
-}
-
-void curl_form::realloc_submit() {
-  submit_buf_size = submit_buf_size ? 2*submit_buf_size : 1024;
-  submit_buf = (char *)realloc(submit_buf, submit_buf_size);
-  if ( submit_buf == NULL )
-    nl_error( 3, "Out of memory in curl_form::append_to_submit()" );
-}
-
-void curl_form::quote_to_submit( const char *text ) {
-  const char *s = text;
-  while (s != NULL && *s != '\0') {
-    int outlen = submit_buf_size - submit_size;
-    if (outlen == 0) {
-      realloc_submit();
-    } else {
-      int inlen = strlen(s);
-      int rv = htmlEncodeEntities( (unsigned char *)submit_buf + submit_size, &outlen,
-        (unsigned char *)s, &inlen, 0 );
-      switch (rv) {
-        case 0:
-          submit_size += outlen;
-          s += inlen;
-          if (*s != '\0')
-            realloc_submit();
-          break;
-        default:
-          nl_error(3, "htmlEncodeEntities returned %d on '%s'", rv, text );
-      }
-    }
-  }
-  submit_buf[submit_size] = '\0';
-}
-
-void curl_form::append_to_submit( const char *text ) {
-  int newlen = strlen(text);
-  while ( submit_size + newlen >= submit_buf_size ) {
-    realloc_submit();
-  }
-  strcpy(submit_buf+submit_size, text);
-  submit_size += newlen;
-}
-
-void curl_form::append_pair_to_submit( const char *nm, const char *val ) {
-  if (need_amp) append_to_submit("&");
-  else need_amp = 1;
-  quote_to_submit(nm);
-  append_to_submit("=");
-  quote_to_submit(val);
-}
-
-void curl_form::submit_int(xmlNodePtr xp) {
-  for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
-      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
-      const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
-      const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
-      if ( typ == NULL || stricmp(typ, "submit") != 0 ) {
-        if ( nm == NULL ) {
-          nl_error(1, "Input with no name" );
-        } else if ( val != NULL ) {
-          nl_error(1, "Input %s=%s", nm, val );
-          append_pair_to_submit(nm, val);
-        }
-      }
-    }
-    submit_int(xp->children);
-  }
-}
-
-void curl_form::submit( const char *desc, const char *name, const char *value ) {
-  const char *method = (const char *)xmlGetProp(form, (const xmlChar *)"method");
-  const char *action = (const char *)xmlGetProp(form, (const xmlChar *)"action");
-  int is_post = 0;
-  submit_size = 0;
-  need_amp = 0;
-  action = co->relative_url(action);
-  if ( stricmp( method, "post" ) == 0 ) {
-    is_post = 1;
-  } else {
-    append_to_submit( action );
-    append_to_submit( "?" );
-  }
-  submit_int(form);
-  append_pair_to_submit( name, value );
-  if ( is_post ) {
-    co->set_url(action);
-    co->set_postfields(submit_buf, submit_size);
-  } else {
-    co->set_url(submit_buf);
-  }
-  nl_error(1, "Submit %s=%s", name, value);
-  co->perform(desc);
 }
