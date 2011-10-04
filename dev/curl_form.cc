@@ -46,6 +46,41 @@ void curl_form::set( const char *name, const char *value ) {
   }
 }
 
+/**
+ * @return true if the element is found and updated.
+ */
+int curl_form::checkbox( xmlNodePtr xp, const char *name, const char *value, int checked ) {
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+      const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
+      if ( nm != 0 && strcmp(nm, name) == 0 && val != 0 && strcmp(val, value) == 0) {
+        if ( checked ) {
+          xmlSetProp(xp, (const xmlChar *)"checked", (const xmlChar *)"checked" );
+        } else {
+          xmlUnsetProp(xp, (const xmlChar *)"checked");
+        }
+        return 1;
+      }
+    }
+    if ( checkbox(xp->children, name, value, checked) )
+      return 1;
+  }
+  return 0;
+}
+
+void curl_form::checkbox( const char *name, const char *value, int checked ) {
+  if ( ! checkbox( form, name, value, checked ) ) {
+    // Need to add an input element with name and value
+    xmlNodePtr field = xmlNewChild(form, NULL, (const xmlChar *) "input", NULL);
+    xmlNewProp(field, (const xmlChar *)"name", (const xmlChar *)name );
+    xmlNewProp(field, (const xmlChar *)"value", (const xmlChar *)value );
+    xmlNewProp(field, (const xmlChar *)"type", (const xmlChar *)"checkbox" );
+    if ( checked )
+      xmlNewProp(field, (const xmlChar *)"checked", (const xmlChar *)"checked" );
+  }
+}
+
 void curl_form::realloc_submit() {
   submit_buf_size = submit_buf_size ? 2*submit_buf_size : 1024;
   submit_buf = (char *)realloc(submit_buf, submit_buf_size);
@@ -101,7 +136,12 @@ void curl_form::submit_int(xmlNodePtr xp) {
       const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
       const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
       const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
-      if ( typ == NULL || stricmp(typ, "submit") != 0 ) {
+      if ( typ != NULL && stricmp(typ, "checkbox") == 0 ) {
+        const char *checked = (const char *)xmlGetProp(xp, (const xmlChar *)"checked" );
+        if ( checked != NULL && stricmp( checked, "checked") == 0 ) {
+          append_pair_to_submit(nm, val);
+        }
+      } else if ( typ == NULL || stricmp(typ, "submit") != 0 ) {
         if ( nm == NULL ) {
           nl_error(1, "Input with no name" );
         } else if ( val != NULL ) {
@@ -114,7 +154,7 @@ void curl_form::submit_int(xmlNodePtr xp) {
   }
 }
 
-void curl_form::submit( const char *desc, const char *name, const char *value ) {
+void curl_form::submit_setup( const char *name, const char *value ) {
   const char *method = (const char *)xmlGetProp(form, (const xmlChar *)"method");
   const char *action = (const char *)xmlGetProp(form, (const xmlChar *)"action");
   int is_post = 0;
@@ -136,5 +176,12 @@ void curl_form::submit( const char *desc, const char *name, const char *value ) 
     co->set_url(submit_buf);
   }
   nl_error(1, "Submit %s=%s", name, value);
+}
+
+/**
+ * easy handle version.
+ */
+void curl_form::submit( const char *desc, const char *name, const char *value ) {
+  submit_setup( name, value );
   co->perform(desc);
 }

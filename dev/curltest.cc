@@ -9,12 +9,11 @@ int main( int argc, char **argv ) {
   co.perform("Description");
   // Now I want to find the form, identify the action and method and all the input fields
   // I then want to modify one or two and submit the form
-  // form = co.find_form(1);
-  // if ( form ) {
-    // form->set( "Username", "" );
-    // form->set( "Password", "" );
-    // form->submit("Login to database", "_submit", "Login");
-  // }
+  form = co.find_form(1);
+  if ( form ) {
+    form->checkbox( "Chars", "3137", 1 );
+    form->submit("Schedule for Celeb: Fan", "_submit", "My Schedule");
+  }
   co.transaction_end();
   return 0;
 }

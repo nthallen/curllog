@@ -16,7 +16,6 @@ curl_global::curl_global() {
   char tbuf[80];
   FILE *fp;
   curl_global_init(CURL_GLOBAL_SSL);
-  atexit(&Cleanup);
   snprintf(tbuf,80,"%s/.next", trans_dir);
   trans_file = strdup(tbuf);
   if ( stat( trans_dir, &sbuf ) == 0 ) {
@@ -83,6 +82,7 @@ void curl_global::Cleanup() {
 curl_global *curl_global::getInstance() {
   if (single == 0) {
     single = new curl_global();
+    atexit(&Cleanup);
   }
   return single;
 }
@@ -117,11 +117,13 @@ curl_obj::curl_obj() {
   method = "GET";
   nl_assert(handle != 0);
   if ( curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, &swrite_data) )
-    nl_error(3, "curl_easy_setup(CURLOPT_WRITEFUNCTION) failed\n");
+    nl_error(3, "curl_easy_setopt(CURLOPT_WRITEFUNCTION) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_WRITEDATA, this ) )
-    nl_error(3, "curl_easy_setup(CURLOPT_WRITEDATA) failed\n");
+    nl_error(3, "curl_easy_setopt(CURLOPT_WRITEDATA) failed\n");
   if ( curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L ) )
-    nl_error(3, "curl_easy_setup(CURLOPT_SSL_VERIFYPEER) failed\n");
+    nl_error(3, "curl_easy_setopt(CURLOPT_SSL_VERIFYPEER) failed\n");
+  if ( curl_easy_setopt(handle, CURLOPT_PRIVATE, this ) )
+    nl_error(3, "curl_easy_setopt(CURLOPT_PRIVATE) failed\n");
 }
 
 curl_obj::~curl_obj() {
@@ -257,7 +259,7 @@ void curl_obj::set_postfields(const char *text, int tsize ) {
   method = "POST";
 }
 
-void curl_obj::perform(const char *req_desc) {
+void curl_obj::perform_setup() {
   if (llvl >= CT_LOG_HEADERS) {
     char fname[80];
     char title[80];
@@ -286,10 +288,13 @@ void curl_obj::perform(const char *req_desc) {
   }
   req_nbytes = 0;
   req_start = time(NULL);
-  if ( curl_easy_perform(handle) )
-    nl_error(1, "WARN: curl_easy_perform() failed\n");
+}
+
+void curl_obj::perform_cleanup(const char *req_desc, CURLcode code) {
   req_end = time(NULL);
-  { long resp_code;
+  if ( code != 0 )
+     nl_error(1, "WARN: curl_easy_perform()/multi op failed\n");
+ { long resp_code;
     curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &resp_code);
     req_status = resp_code;
   }
@@ -324,6 +329,11 @@ void curl_obj::perform(const char *req_desc) {
     fprintf( req_summary, "<td>%d</td></tr>\n", req_status ); // Use status of last request
   }
   ++req_num;
+}
+
+void curl_obj::perform(const char *req_desc) {
+  perform_setup();
+  perform_cleanup(req_desc, curl_easy_perform(handle));
 }
 
 void curl_obj::transaction_start(const char *desc) {

@@ -5,6 +5,8 @@
 #include "curl/curl.h"
 
 class curl_form;
+class curl_multi;
+class curl_socket;
 
 class curl_global {
   private:
@@ -26,8 +28,6 @@ enum curl_log_level_t { CT_LOG_NOTHING,
 
 class curl_obj {
   private:
-    CURL *handle;
-    curl_global *global;
     curl_log_level_t llvl;
     const char *req_url;
     const char *trans_desc;
@@ -37,7 +37,6 @@ class curl_obj {
     int req_nbytes;
     int parse_requested;
     int parsing;
-    int transaction_started;
     time_t trans_start, trans_end;
     time_t req_start, req_end;
     FILE *req_summary;
@@ -61,6 +60,12 @@ class curl_obj {
     void print_times( FILE *fp, time_t stime, time_t etime );
     int add_base( xmlNodePtr xp, const char *url );
     curl_form *find_form_int( xmlNodePtr xp, int n );
+  protected:
+    CURL *handle;
+    curl_global *global;
+    int transaction_started;
+    void perform_setup();
+    void perform_cleanup(const char *, CURLcode);
   public:
     const char *method;
     curl_obj();
@@ -91,11 +96,14 @@ class curl_form {
     void quote_to_submit( const char *text );
     void append_pair_to_submit( const char *nm, const char *val );
     int set( xmlNodePtr xp, const char *name, const char *value );
+    int checkbox(  xmlNodePtr xp, const char *name, const char *value, int checked );
     void submit_int(xmlNodePtr xp);
   public:
     curl_form(curl_obj *co, xmlNodePtr top);
     ~curl_form();
     void set( const char *name, const char *value );
+    void checkbox( const char *name, const char *value, int checked );
+    void submit_setup( const char *name, const char *value );
     void submit( const char *desc, const char *name, const char *value );
 };
 
