@@ -4,12 +4,15 @@
 #include "nortlib.h"
 #include "nl_assert.h"
 
-Selector::Selector() {}
+Selector::Selector() {
+  children_changed = false;
+}
 
 void Selector::add_child(Selectee *P) {
   if (S.find(P->fd) == S.end() ) {
     S[P->fd] = P;
     P->Stor = this;
+    children_changed = true;
   } else {
     nl_error( 4, "fd %d already inserted in Selector::add_child", P->fd );
   }
@@ -29,17 +32,23 @@ void Selector::delete_child(int fd_in) {
   if ( S.erase(fd_in) == 0 ) {
     nl_error( 4, "fd %d not found in Selector::delete_child()", P->fd);
   }
+  children_changed = true;
   delete P;
 }
 
-void Selector::update_flags(int fd_in, int flag) {
+/**
+ * \returns 0 on success, 1 if fd_in is not found.
+ */
+int Selector::update_flags(int fd_in, int flag) {
   SelecteeMap::const_iterator pos;
   pos = S.find(fd_in);
   if ( pos != S.end() ) {
     Selectee *P = pos->second;
     P->flags = flag;
+    children_changed = true;
+    return 0;
   } else {
-    nl_error( 4, "fd %d not found in Selector::update_flags", fd_in );
+    return 1;
   }
 }
 
@@ -57,6 +66,7 @@ void Selector::event_loop() {
     FD_ZERO(&writefds);
     FD_ZERO(&exceptfds);
     to.Set_Min(GetTimeout());
+    children_changed = false;
     for ( Sp = S.begin(); Sp != S.end(); ++Sp ) {
       Selectee *P = Sp->second;
       if (P->flags & Sel_Read) FD_SET(P->fd, &readfds);
@@ -84,8 +94,11 @@ void Selector::event_loop() {
         if ( (P->flags & Sel_Read) && FD_ISSET(P->fd, &readfds) ) flags |= Sel_Read;
         if ( (P->flags & Sel_Write) && FD_ISSET(P->fd, &writefds) ) flags |= Sel_Write;
         if ( (P->flags & Sel_Except) && FD_ISSET(P->fd, &exceptfds) ) flags |= Sel_Except;
-        if ( flags && P->ProcessData(flags) )
-          keep_going = 0;
+        if ( flags ) {
+          if ( P->ProcessData(flags) )
+            keep_going = 0;
+          if (children_changed) break; // Changes can occur during ProcessData
+        }
       }
     }
   }

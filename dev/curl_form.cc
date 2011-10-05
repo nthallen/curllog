@@ -89,28 +89,13 @@ void curl_form::realloc_submit() {
 }
 
 void curl_form::quote_to_submit( const char *text ) {
-  const char *s = text;
-  while (s != NULL && *s != '\0') {
-    int outlen = submit_buf_size - submit_size;
-    if (outlen == 0) {
-      realloc_submit();
-    } else {
-      int inlen = strlen(s);
-      int rv = htmlEncodeEntities( (unsigned char *)submit_buf + submit_size, &outlen,
-        (unsigned char *)s, &inlen, 0 );
-      switch (rv) {
-        case 0:
-          submit_size += outlen;
-          s += inlen;
-          if (*s != '\0')
-            realloc_submit();
-          break;
-        default:
-          nl_error(3, "htmlEncodeEntities returned %d on '%s'", rv, text );
-      }
-    }
+  char *s = curl_easy_escape(co->handle, text, 0);
+  if ( s == NULL ) {
+    nl_error( 1, "curl_easy_escape() returned NULL" );
+  } else {
+    append_to_submit(s);
+    curl_free(s);
   }
-  submit_buf[submit_size] = '\0';
 }
 
 void curl_form::append_to_submit( const char *text ) {
@@ -145,7 +130,7 @@ void curl_form::submit_int(xmlNodePtr xp) {
         if ( nm == NULL ) {
           nl_error(1, "Input with no name" );
         } else if ( val != NULL ) {
-          nl_error(1, "Input %s=%s", nm, val );
+          nl_error(-2, "Input %s=%s", nm, val );
           append_pair_to_submit(nm, val);
         }
       }
@@ -175,7 +160,7 @@ void curl_form::submit_setup( const char *name, const char *value ) {
   } else {
     co->set_url(submit_buf);
   }
-  nl_error(1, "Submit %s=%s", name, value);
+  nl_error(-2, "Submit %s=%s", name, value);
 }
 
 /**

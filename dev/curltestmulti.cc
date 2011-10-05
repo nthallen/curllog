@@ -1,6 +1,9 @@
 #include "curl_select.h"
 #include "nl_assert.h"
 
+#define HOST "http://localhost"
+// #define HOST "https://act.arlington.ma.us"
+
 TransactionStep Req0, Req1, Req2;
 
 int main( int argc, char **argv ) {
@@ -15,7 +18,7 @@ int main( int argc, char **argv ) {
 
 int Req0(curl_multi_obj *co, CURLcode code ) {
   nl_assert( code == 0 );
-  co->set_url("https://act.arlington.ma.us/cgi-bin/ACTdb/MySchedule?Proj_ID=330");
+  co->set_url( HOST "/cgi-bin/ACTdb/MySchedule?Proj_ID=330");
   co->multi_add( &Req1, "Get empty form" );  
   return 0;
 }

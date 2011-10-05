@@ -111,7 +111,7 @@ curl_obj::curl_obj() {
   req_summary = NULL;
   // req_data_log = NULL;
   req_hdr_log = NULL;
-  parse_requested = 0;
+  parse_requested = 1;
   parsing = 0;
   parser = NULL;
   method = "GET";

@@ -15,6 +15,7 @@ class curl_multi : public Selector {
     curl_multi();
     ~curl_multi();
     int socket_action(int fd, int ev_bitmask );
+    inline CURLMcode multi_add(CURL *handle) { return curl_multi_add_handle(multi, handle); }
     static curl_multi *getInstance();
     static int static_socket_function(CURL *easy, curl_socket_t s,
                   int what, void *userp, void *socketp);

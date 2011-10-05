@@ -73,6 +73,7 @@ class curl_obj {
     void set_log_level(curl_log_level_t lvl);
     void set_url(const char *url);
     void set_postfields(const char *text, int field_size);
+    inline void parse_request(int requested) { parse_requested = requested; }
     void perform(const char *req_desc);
     void transaction_start(const char *desc);
     void transaction_end();
@@ -81,6 +82,7 @@ class curl_obj {
     const char *relative_url( const char *href );
     static FILE *create_html_log( const char *fname, const char *title, ... );
     static FILE *close_html_log(FILE *fp);
+  friend class curl_form;
 };
 
 class curl_form {

@@ -35,10 +35,11 @@ class Selector {
     Selector();
     void add_child(Selectee *P);
     void delete_child(int fd_in);
-    void update_flags(int fd_in, int flag);
+    int update_flags(int fd_in, int flag);
     void event_loop();
   private:
     SelecteeMap S;
+    bool children_changed;
     virtual int ProcessTimeout();
     virtual Timeout *GetTimeout();
 };
