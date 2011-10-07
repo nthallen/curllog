@@ -1,0 +1,3 @@
+curllog is a C++ wrapper around libcurl and the libxml2 HTML parser
+for the purpose of facilitating scripting of web interactions and
+optionally logging the results in useful formats.
