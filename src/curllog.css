@@ -1,0 +1,15 @@
+body {
+  background-color: #FFE7FC;
+}
+#TransIdx {
+  background-color: #60BFF9;
+}
+#Headers .info {
+  background-color: #38FB63;
+}
+#Headers .reqhdr {
+  background-color: #60BFF9;
+}
+#Headers .resphdr {
+  background-color: #38F8FB;
+}

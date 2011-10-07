@@ -11,5 +11,3 @@ curltestmulti : $(CTMOBJ)
 
 curltest : $(CTOBJ)
 	$(LINK.cc) -o curltest $(CTOBJ) $(LDLIBS)
-
-xmltest : xmltest.c
