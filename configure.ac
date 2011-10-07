@@ -6,6 +6,8 @@ AC_INIT([curllog], [1.0], [allen@huarp.harvard.edu])
 AC_CONFIG_SRCDIR([src/curltest.cc])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
+LT_INIT
+AC_SUBST([LIBTOOL_DEPS])
 
 # Checks for programs.
 AC_PROG_CXX
