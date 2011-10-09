@@ -1,0 +1,12 @@
+.deps
+.libs
+Makefile
+Makefile.in
+Selectee.lo
+Selector.lo
+Timeout.lo
+curl_form.lo
+curl_multi.lo
+curl_obj.lo
+curl_select.lo
+libcurllog.la

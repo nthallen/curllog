@@ -3,18 +3,34 @@
 
 AC_PREREQ([2.68])
 AC_INIT([curllog], [1.0], [allen@huarp.harvard.edu])
-AC_CONFIG_SRCDIR([src/curltest.cc])
+AC_CONFIG_SRCDIR([src/curl_obj.cc])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
 LT_INIT
 AC_SUBST([LIBTOOL_DEPS])
+AC_SUBST([XML2CFLAGS])
+AC_SUBST([XML2LIBS])
+# AC_SUBST([CURLCFLAGS])
+AC_SUBST([CURLLIBS])
 
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
+AC_CHECK_PROG([XML2CONFIG],[xml2-config],[xml2-config],[none])
+if test b$XML2CONFIG = none; then AC_MSG_ERROR([Cannot locate xml2-config]); fi
+XML2CFLAGS=`xml2-config --cflags`
+XML2LIBS=`xml2-config --libs`
+
+AC_CHECK_PROG([CURLCONFIG],[curl-config],[curl-config],[none])
+if test b$CURLCONFIG = none; then AC_MSG_ERROR([Cannot locate curl-config]); fi
+# CURLCFLAGS=`curl-config --cflags`
+CURLLIBS=`curl-config --libs`
 
 # Checks for libraries.
+# xml2 and curl both provide config functions for finding their libraries,
+# but I'm ignoring those because I think a simple -lxml2 -lcurl will do the job
+# for now.
 AC_CHECK_LIB([xml2], [htmlCreatePushParserCtxt],
   ,[AC_MSG_ERROR([Required library libxml2 not found])])
 AC_CHECK_LIB([curl], [curl_global_init],
@@ -23,7 +39,17 @@ AC_CHECK_LIB([curl], [curl_global_init],
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
 AC_CHECK_HEADER([curl/curl.h],[],[AC_MSG_ERROR([Required header curl/curl.h not found])])
+
+# Check for xml2 headers
+CPPFLAGS_SET=${CPPFLAGS+set}
+SAVE_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS $XML2CFLAGS"
 AC_CHECK_HEADER([libxml/HTMLparser.h],[],[AC_MSG_ERROR([Required header libxml/HTMLparser.h not found])])
+if test g"$CPPFLAGS_SET" = set; then
+  CPPFLAGS=$SAVE_CPPFLAGS
+else
+  unset CPPFLAGS
+fi
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
