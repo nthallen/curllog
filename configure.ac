@@ -5,7 +5,7 @@ AC_PREREQ([2.59])
 AC_INIT([curllog], [1.0], [allen@huarp.harvard.edu])
 AC_CONFIG_SRCDIR([src/curl_obj.cc])
 AC_CONFIG_HEADERS([config.h])
-#AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
 #LT_INIT
 AM_PROG_LIBTOOL
