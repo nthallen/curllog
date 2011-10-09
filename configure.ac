@@ -5,7 +5,7 @@ AC_PREREQ([2.59])
 AC_INIT([curllog], [1.0], [allen@huarp.harvard.edu])
 AC_CONFIG_SRCDIR([src/curl_obj.cc])
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_MACRO_DIR([m4])
+#AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
 #LT_INIT
 AM_PROG_LIBTOOL
@@ -59,7 +59,7 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([atexit clock_gettime mkdir select strdup strerror])
+AC_CHECK_FUNCS([atexit clock_gettime mkdir select strdup strerror curl_multi_socket_action])
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile])

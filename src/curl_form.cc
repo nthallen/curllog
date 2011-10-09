@@ -24,7 +24,7 @@ curl_form::~curl_form() {
  */
 int curl_form::set( xmlNodePtr xp, const char *name, const char *value ) {
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "input") == 0 ) {
       const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
       if ( nm != 0 && strcmp(nm, name) == 0 ) {
         xmlSetProp(xp, (const xmlChar *)"value", (const xmlChar *)value );
@@ -51,7 +51,7 @@ void curl_form::set( const char *name, const char *value ) {
  */
 int curl_form::checkbox( xmlNodePtr xp, const char *name, const char *value, int checked ) {
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "input") == 0 ) {
       const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
       const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
       if ( nm != 0 && strcmp(nm, name) == 0 && val != 0 && strcmp(val, value) == 0) {
@@ -117,16 +117,16 @@ void curl_form::append_pair_to_submit( const char *nm, const char *val ) {
 
 void curl_form::submit_int(xmlNodePtr xp) {
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "input") == 0 ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "input") == 0 ) {
       const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
       const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
       const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
-      if ( typ != NULL && stricmp(typ, "checkbox") == 0 ) {
+      if ( typ != NULL && strcasecmp(typ, "checkbox") == 0 ) {
         const char *checked = (const char *)xmlGetProp(xp, (const xmlChar *)"checked" );
-        if ( checked != NULL && stricmp( checked, "checked") == 0 ) {
+        if ( checked != NULL && strcasecmp( checked, "checked") == 0 ) {
           append_pair_to_submit(nm, val);
         }
-      } else if ( typ == NULL || stricmp(typ, "submit") != 0 ) {
+      } else if ( typ == NULL || strcasecmp(typ, "submit") != 0 ) {
         if ( nm == NULL ) {
           nl_error(1, "Input with no name" );
         } else if ( val != NULL ) {
@@ -146,7 +146,7 @@ void curl_form::submit_setup( const char *name, const char *value ) {
   submit_size = 0;
   need_amp = 0;
   action = co->relative_url(action);
-  if ( stricmp( method, "post" ) == 0 ) {
+  if ( strcasecmp( method, "post" ) == 0 ) {
     is_post = 1;
   } else {
     append_to_submit( action );

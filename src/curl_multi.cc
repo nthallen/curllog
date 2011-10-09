@@ -1,3 +1,4 @@
+#include "config.h"
 #include "curllog/curl_select.h"
 #include "nortlib.h"
 #include "nl_assert.h"
@@ -14,10 +15,12 @@ curl_multi::curl_multi() {
     nl_error( 3, "CURLMOPT_SOCKETFUNCTION failed" );
   if ( curl_multi_setopt(multi, CURLMOPT_SOCKETDATA, this) != CURLM_OK )
     nl_error( 3, "CURLMOPT_SOCKETDATA failed" );
-  if ( curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION, &static_timer_function) != CURLM_OK )
-    nl_error( 3, "CURLMOPT_TIMERFUNCTION failed" );
-  if ( curl_multi_setopt(multi, CURLMOPT_TIMERDATA, this) != CURLM_OK )
-    nl_error( 3, "CURLMOPT_TIMERDATA failed" );
+  #ifdef CURLMOPT_TIMERFUNCTION
+    if ( curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION, &static_timer_function) != CURLM_OK )
+      nl_error( 3, "CURLMOPT_TIMERFUNCTION failed" );
+    if ( curl_multi_setopt(multi, CURLMOPT_TIMERDATA, this) != CURLM_OK )
+      nl_error( 3, "CURLMOPT_TIMERDATA failed" );
+  #endif
 }
 
 curl_multi::~curl_multi() {
@@ -33,11 +36,13 @@ int curl_multi::static_socket_function(CURL *easy, curl_socket_t s,
   return mp->socket_function(easy, s, what, socketp);
 }
 
-int curl_multi::static_timer_function(CURLM *multi, long timeout_ms, void *userp) {
-  curl_multi *mt = (curl_multi *)userp;
-  mt->timeout_msec = timeout_ms;
-  return 0;
-}
+#ifdef CURLMOPT_TIMERFUNCTION
+  int curl_multi::static_timer_function(CURLM *multi, long timeout_ms, void *userp) {
+    curl_multi *mt = (curl_multi *)userp;
+    mt->timeout_msec = timeout_ms;
+    return 0;
+  }
+#endif
 
 curl_multi *curl_multi::getInstance() {
   if (single == 0) {
@@ -59,6 +64,10 @@ int curl_multi::ProcessTimeout() {
 }
 
 Timeout *curl_multi::GetTimeout() {
+  #ifndef CURLMOPT_TIMERFUNCTION
+    if ( curl_multi_timeout(multi, &timeout_msec) != CURLM_OK )
+      nl_error(4, "Unexpected error from curl_multi_timeout()" );
+  #endif
   if ( timeout_msec < 0 ) {
     to.Set(6, 0); // Recommended maximum
   } else {
@@ -68,11 +77,20 @@ Timeout *curl_multi::GetTimeout() {
 }
 
 int curl_multi::socket_action(int fd, int ev_bitmask ) {
+  CURLMcode rv;
   int ready_to_quit = 0;
   int new_running_handles = running_handles;
-  CURLMcode rv = curl_multi_socket_action( multi, fd, ev_bitmask, &new_running_handles );
-  if ( rv != CURLM_OK )
-    nl_error( 4, "Error %d from curl_multi_socket_action()", rv );
+  #if HAVE_CURL_MULTI_SOCKET_ACTION
+    rv = curl_multi_socket_action( multi, fd, ev_bitmask, &new_running_handles );
+    if ( rv != CURLM_OK )
+      nl_error( 4, "Error %d (%s) from curl_multi_socket_action()", rv, curl_multi_strerror(rv) );
+  #else
+    do {
+      rv = curl_multi_perform( multi, &new_running_handles );
+      if ( rv != CURLM_OK && rv != CURLM_CALL_MULTI_PERFORM)
+	nl_error( 4, "Error %d (%s) from curl_multi_socket_action()", rv, curl_multi_strerror(rv ) );
+    } while (rv == CURLM_CALL_MULTI_PERFORM);
+  #endif
   if ( new_running_handles < running_handles ) {
     int msgs_in_queue;
     CURLMsg *msg;
@@ -83,7 +101,6 @@ int curl_multi::socket_action(int fd, int ev_bitmask ) {
       } else if ( msg->msg == CURLMSG_DONE ) {
         CURL *easy = msg->easy_handle;
         CURLcode code = msg->data.result;
-        //CURLMcode rv;
         curl_multi_obj *co;
         rv = curl_multi_remove_handle(multi, easy);
         if ( rv != CURLM_OK )

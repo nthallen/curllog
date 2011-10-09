@@ -434,7 +434,7 @@ void curl_obj::print_times( FILE *fp, time_t stime, time_t etime ) {
   */
 int curl_obj::add_base( xmlNodePtr xp, const char *url ) {
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "head") == 0 ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "head") == 0 ) {
       xmlNodePtr bp = xmlNewDocNode( xp->doc, NULL, (const xmlChar *)"base", NULL );
       xmlNewProp(bp, (const xmlChar *)"href", (const xmlChar *)url);
       if ( xp->children ) {
@@ -457,7 +457,7 @@ xmlNodePtr curl_obj::get_parse_tree() {
 curl_form *curl_obj::find_form_int( xmlNodePtr xp, int n ) {
   curl_form *rv;
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && stricmp((const char *)xp->name, "form") == 0 ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "form") == 0 ) {
       if ( --n <= 0 ) return new curl_form( this, xp );
       // Don't need to go through form's children.
     } else {
