@@ -19,12 +19,14 @@ AC_SUBST([CURLLIBS])
 AC_PROG_CXX
 AC_PROG_CC
 AC_CHECK_PROG([XML2CONFIG],[xml2-config],[xml2-config],[none])
-if test b$XML2CONFIG = none; then AC_MSG_ERROR([Cannot locate xml2-config]); fi
-XML2CFLAGS=`xml2-config --cflags`
-XML2LIBS=`xml2-config --libs`
+# on QNX6, xml2-config is not present, but extra args aren't required
+if test $XML2CONFIG = xml2-config; then
+  XML2CFLAGS=`xml2-config --cflags`
+  XML2LIBS=`xml2-config --libs`
+fi
 
 AC_CHECK_PROG([CURLCONFIG],[curl-config],[curl-config],[none])
-if test b$CURLCONFIG = none; then AC_MSG_ERROR([Cannot locate curl-config]); fi
+if test $CURLCONFIG = none; then AC_MSG_ERROR([Cannot locate curl-config]); fi
 # CURLCFLAGS=`curl-config --cflags`
 CURLLIBS=`curl-config --libs`
 
