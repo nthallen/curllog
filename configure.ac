@@ -1,13 +1,14 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.68])
+AC_PREREQ([2.59])
 AC_INIT([curllog], [1.0], [allen@huarp.harvard.edu])
 AC_CONFIG_SRCDIR([src/curl_obj.cc])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
-LT_INIT
+#LT_INIT
+AM_PROG_LIBTOOL
 AC_SUBST([LIBTOOL_DEPS])
 AC_SUBST([XML2CFLAGS])
 AC_SUBST([XML2LIBS])
@@ -45,7 +46,7 @@ CPPFLAGS_SET=${CPPFLAGS+set}
 SAVE_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$CPPFLAGS $XML2CFLAGS"
 AC_CHECK_HEADER([libxml/HTMLparser.h],[],[AC_MSG_ERROR([Required header libxml/HTMLparser.h not found])])
-if test g"$CPPFLAGS_SET" = set; then
+if test "$CPPFLAGS_SET" = set; then
   CPPFLAGS=$SAVE_CPPFLAGS
 else
   unset CPPFLAGS
