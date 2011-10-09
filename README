@@ -1,3 +1,34 @@
 curllog is a C++ wrapper around libcurl and the libxml2 HTML parser
 for the purpose of facilitating scripting of web interactions and
 optionally logging the results in useful formats.
+
+Work with the Gnu Autotools has been a bit painful due to the fact that different versions are installed on the various systems I want to run on.
+
+Currently:
+
+ocs-fts:
+  autoreconf -i fails, and libtool is out of date, so:
+
+  libtoolize --force
+  aclocal
+  autoheader
+  automake --add-missing
+  autoconf
+  lcl=/home/nallen/local
+  ./configure --prefix=$lcl CPPFLAGS=-I$lcl/include LDFLAGS=-L$lcl/lib
+  make
+
+qnx6:
+  libtool is out of date, so:
+
+  autoreconf -i --force
+  ./configure
+  make
+
+cygwin:
+  cutting edge!:
+
+  autoreconf -i
+  ./configure
+  make
+
