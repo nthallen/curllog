@@ -153,34 +153,38 @@ int curl_multi::socket_function(CURL *easy, curl_socket_t s,
   return 0; // Callback must return 0
 }
 
-Transaction::Transaction(TransactionStep *F_in, const char *desc_in) {
-  F = F_in;
+Transaction::Transaction(curl_multi_obj *co_in, const char *desc_in) {
+  co = co_in;
   desc = desc_in;
 }
 
+Transaction::~Transaction() {}
+
 curl_multi_obj::curl_multi_obj() {
   multi = curl_multi::getInstance();
-  next_step = 0;
 }
 
-void curl_multi_obj::enqueue_transaction(TransactionStep *F_in, const char *desc_in) {
-  Transactions.push_back(Transaction(F_in, desc_in));
+void curl_multi_obj::enqueue_transaction(Transaction *T) {
+  Transactions.push_back(T);
   if ( ! transaction_started ) dequeue_transaction();
 }
 
 void curl_multi_obj::dequeue_transaction() {
-  if ( transaction_started ) Transactions.pop_front();
+  if ( transaction_started ) {
+    delete Transactions.front();
+    Transactions.pop_front();
+  }
   if ( !Transactions.empty() ) {
-    Transaction T = Transactions.front();
-    transaction_start(T.desc);
-    T.F(this, CURLE_OK);
+    Transaction *T = Transactions.front();
+    transaction_start(T->desc);
+    T->take_next_step(CURLE_OK);
+    // T->F(this, CURLE_OK, T); // Or something!
   }
 }
 
-void curl_multi_obj::multi_add(TransactionStep *F_in, const char *desc) {
+void curl_multi_obj::multi_add(const char *desc) {
   CURLMcode rv;
   req_desc = desc;
-  next_step = F_in;
   perform_setup();
   rv = multi->multi_add(handle);
   if (rv != CURLM_OK )
@@ -188,13 +192,10 @@ void curl_multi_obj::multi_add(TransactionStep *F_in, const char *desc) {
 }
 
 int curl_multi_obj::take_next_step(CURLcode code) {
-  TransactionStep *F;
-  nl_assert(next_step != 0 && req_desc != 0);
+  nl_assert(req_desc != 0);
   perform_cleanup(req_desc, code);
-  F = next_step;
-  next_step = 0;
   req_desc = 0;
-  return F(this, code);
+  return Transactions.front()->take_next_step(code);
 }
 
 void curl_multi_obj::event_loop() {

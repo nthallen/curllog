@@ -4,9 +4,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <ctype.h>
 #include "curllog/curl_obj.h"
 #include "nl_assert.h"
+
+#define QP_(x) #x
+#define QP(x) QP_(x)
+#ifndef CSS_SRC_DIR
+  #define CSS_SRC_DIR /usr/local/share
+#endif
 
 const char *curl_global::trans_dir = "trans";
 curl_global *curl_global::single;
@@ -25,6 +32,42 @@ curl_global::curl_global() {
   } else if ( mkdir( trans_dir, 0666 ) == -1 ) {
     nl_error( 3, "FATAL: Error creating transaction directory %s: %s\n",
         trans_dir, strerror(errno) );
+  }
+  snprintf(tbuf, 80, "%s/curllog.css", trans_dir);
+  if ( stat( tbuf, &sbuf ) != 0 ) {
+    char buf[512];
+    const char *src = QP(CSS_SRC_DIR) "/curllog.css";
+    FILE *from, *to;
+    // Copy the file in from the default location
+    // snprintf(src, 80, "%s/curllog.css", QP(CSS_SRC_DIR) );
+    from = fopen( src, "r" );
+    if ( from ) {
+      to = fopen(tbuf, "w");
+      if (to) {
+        int nbr;
+        for (;;) {
+          nbr = fread( buf, 1, 512, from );
+          if ( nbr > 0 ) {
+            int nbw = 0;
+            while ( nbw < nbr ) {
+              int nb = fwrite( buf+nbw, 1, nbr-nbw, to );
+              if ( nb == 0 ) {
+                nl_error( 2, "Error writing to %s: %s", tbuf, strerror(errno) );
+                break;
+              }
+              nbw += nb;
+            }
+            if ( nbw < nbr ) break;
+          } else break;
+        }
+        fclose(to);
+      } else {
+        nl_error( 1, "Unable to write to css file '%s': %s", tbuf, strerror(errno) );
+      }
+      fclose(from);
+    } else {
+      nl_error( 1, "Unable to read from css file source '%s': %s", src, strerror(errno) );
+    }
   }
   fp = fopen( trans_file, "r" );
   if ( fp != 0 ) {
@@ -390,6 +433,7 @@ FILE *curl_obj::create_html_log( const char *fname, const char *title, ... ) {
   va_list arg;
   char ftitle[80];
   const char *s;
+  int depth = 0;
 
   va_start(arg, title);
   vsnprintf(ftitle, 79, title, arg );
@@ -405,7 +449,7 @@ FILE *curl_obj::create_html_log( const char *fname, const char *title, ... ) {
     "  <title>", ftitle, "</title>\n"
     "  <link href=\"" );
   for ( s = fname; *s; ++s ) {
-    if ( *s == '/' )
+    if ( *s == '/' && ++depth > 1 )
       fprintf( fp, "../" );
   }
   fprintf( fp,

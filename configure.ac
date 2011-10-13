@@ -38,6 +38,8 @@ AC_CHECK_LIB([xml2], [htmlCreatePushParserCtxt],
   ,[AC_MSG_ERROR([Required library libxml2 not found])])
 AC_CHECK_LIB([curl], [curl_global_init],
   ,[AC_MSG_ERROR([Required library libcurl not found])])
+AC_CHECK_LIB([nort], [nl_error],
+  ,[AC_MSG_ERROR([Required library libnort not found])])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
@@ -64,5 +66,6 @@ AC_FUNC_REALLOC
 AC_CHECK_FUNCS([atexit clock_gettime mkdir select strdup strerror curl_multi_socket_action])
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+                 test/Makefile])
 AC_OUTPUT

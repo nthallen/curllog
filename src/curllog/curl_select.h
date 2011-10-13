@@ -43,29 +43,28 @@ class curl_selectee : public Selectee {
     curl_multi_obj *co;
 };
 
-typedef int TransactionStep(curl_multi_obj*, CURLcode);
-
 class Transaction {
   public:
-    TransactionStep *F;
+    curl_multi_obj *co;
     const char *desc;
-    Transaction(TransactionStep*,const char *);
+    Transaction(curl_multi_obj*,const char *);
+    virtual ~Transaction();
+    virtual int take_next_step(CURLcode) = 0;
 };
 
 class curl_multi_obj : public curl_obj {
   public:
     curl_multi_obj();
-    void enqueue_transaction(TransactionStep*, const char *);
+    void enqueue_transaction(Transaction *);
     void dequeue_transaction();
-    void multi_add(TransactionStep*, const char *);
+    void multi_add(const char *);
     int take_next_step(CURLcode);
     int socket_action(int fd, int ev_bitmask );
     void event_loop();
   private:
     curl_multi *multi;
-    TransactionStep *next_step;
     const char *req_desc;
-    std::deque<Transaction> Transactions;
+    std::deque<Transaction*> Transactions;
 };
 
 #endif
