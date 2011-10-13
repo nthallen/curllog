@@ -8,14 +8,16 @@ Currently:
 
 ocs-fts:
   autoreconf -i fails, and libtool is out of date, so:
+  Need to add a proper test for clock_gettime in -lrt
 
+  lcl=/home/nallen/local
+  export LD_LIBRARY_PATH=$lcl/lib
   libtoolize --force
   aclocal
   autoheader
   automake --add-missing
   autoconf
-  lcl=/home/nallen/local
-  ./configure --prefix=$lcl CPPFLAGS=-I$lcl/include LDFLAGS=-L$lcl/lib
+  ./configure --prefix=$lcl CPPFLAGS=-I$lcl/include LDFLAGS='-L$lcl/lib -lrt'
   make
 
 qnx6:
