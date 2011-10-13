@@ -40,6 +40,7 @@ AC_CHECK_LIB([curl], [curl_global_init],
   ,[AC_MSG_ERROR([Required library libcurl not found])])
 AC_CHECK_LIB([nort], [nl_error],
   ,[AC_MSG_ERROR([Required library libnort not found])])
+AC_SEARCH_LIBS([clock_gettime],[rt])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
