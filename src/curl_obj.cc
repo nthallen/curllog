@@ -29,7 +29,7 @@ curl_global::curl_global() {
     if ( ! S_ISDIR(sbuf.st_mode) ) {
       nl_error( 3, "FATAL: Cannot create transaction directory %s\n", trans_dir );
     }
-  } else if ( mkdir( trans_dir, 0666 ) == -1 ) {
+  } else if ( mkdir( trans_dir, 0777 ) == -1 ) {
     nl_error( 3, "FATAL: Error creating transaction directory %s: %s\n",
         trans_dir, strerror(errno) );
   }
@@ -37,20 +37,20 @@ curl_global::curl_global() {
   if ( stat( tbuf, &sbuf ) != 0 ) {
     char buf[512];
     const char *src = QP(CSS_SRC_DIR) "/curllog.css";
-    FILE *from, *to;
+    FILE *from, *dest;
     // Copy the file in from the default location
     // snprintf(src, 80, "%s/curllog.css", QP(CSS_SRC_DIR) );
     from = fopen( src, "r" );
-    if ( from ) {
-      to = fopen(tbuf, "w");
-      if (to) {
+    if ( from != NULL ) {
+      dest = fopen(tbuf, "w");
+      if (dest != NULL) {
         int nbr;
         for (;;) {
           nbr = fread( buf, 1, 512, from );
           if ( nbr > 0 ) {
             int nbw = 0;
             while ( nbw < nbr ) {
-              int nb = fwrite( buf+nbw, 1, nbr-nbw, to );
+              int nb = fwrite( buf+nbw, 1, nbr-nbw, dest );
               if ( nb == 0 ) {
                 nl_error( 2, "Error writing to %s: %s", tbuf, strerror(errno) );
                 break;
@@ -60,7 +60,7 @@ curl_global::curl_global() {
             if ( nbw < nbr ) break;
           } else break;
         }
-        fclose(to);
+        fclose(dest);
       } else {
         nl_error( 1, "Unable to write to css file '%s': %s", tbuf, strerror(errno) );
       }
