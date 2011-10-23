@@ -47,6 +47,7 @@ void curl_form::set( const char *name, const char *value ) {
 }
 
 /**
+ * Recursive function to find the specified input node.
  * @return true if the element is found and updated.
  */
 int curl_form::checkbox( xmlNodePtr xp, const char *name, const char *value, int checked ) {
@@ -79,6 +80,46 @@ void curl_form::checkbox( const char *name, const char *value, int checked ) {
     if ( checked )
       xmlNewProp(field, (const xmlChar *)"checked", (const xmlChar *)"checked" );
   }
+}
+
+/**
+ * Recursive function to find named <select> and <option> value and select it,
+ * deselecting all others.
+ * @return true if value is found and selected.
+ */
+int curl_form::select_single( xmlNodePtr xp,  const char *name, const char *value ) {
+  int rv = 0;
+  for ( ; xp != NULL; xp = xp->next ) {
+    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "select") == 0 ) {
+      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+      if ( nm != 0 && strcmp(nm, name) == 0 ) {
+        xmlNodePtr xpc;
+        for ( xpc = xp->children; xpc != NULL; xpc = xpc->next ) {
+          if ( xpc->name != NULL && strcasecmp((const char *)xpc->name, "option") == 0 ) {
+            const char *val = (const char *)xmlGetProp(xpc, (const xmlChar *)"value" );
+            if ( val != NULL && strcmp(val, value) == 0 ) {
+              xmlSetProp(xpc, (const xmlChar *)"selected", (const xmlChar *)"selected" );
+              rv = 1;
+            } else {
+              xmlUnsetProp(xpc, (const xmlChar *)"selected" );
+            }
+          }
+        }
+        return rv; // or zero if value is not found
+      }
+    }
+    if ( select_single(xp->children, name, value) )
+      return 1;
+  }
+  return 0;
+}
+
+/**
+ * Select the specified value and deselect all other values.
+ @return true if name and value are found and selected.
+ */
+int curl_form::select_single( const char *name, const char *value ) {
+  return select_single(form, name, value);
 }
 
 void curl_form::realloc_submit() {
@@ -117,21 +158,35 @@ void curl_form::append_pair_to_submit( const char *nm, const char *val ) {
 
 void curl_form::submit_int(xmlNodePtr xp) {
   for ( ; xp != NULL; xp = xp->next ) {
-    if ( xp->name != NULL && strcasecmp((const char *)xp->name, "input") == 0 ) {
-      const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
-      const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
-      const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
-      if ( typ != NULL && strcasecmp(typ, "checkbox") == 0 ) {
-        const char *checked = (const char *)xmlGetProp(xp, (const xmlChar *)"checked" );
-        if ( checked != NULL && strcasecmp( checked, "checked") == 0 ) {
-          append_pair_to_submit(nm, val);
+    if ( xp->name != NULL ) {
+      if ( strcasecmp((const char *)xp->name, "input") == 0 ) {
+        const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+        const char *typ = (const char *)xmlGetProp(xp, (const xmlChar *)"type" );
+        const char *val = (const char *)xmlGetProp(xp, (const xmlChar *)"value" );
+        if ( typ != NULL && strcasecmp(typ, "checkbox") == 0 ) {
+          const char *checked = (const char *)xmlGetProp(xp, (const xmlChar *)"checked" );
+          if ( checked != NULL && strcasecmp( checked, "checked") == 0 ) {
+            append_pair_to_submit(nm, val);
+          }
+        } else if ( typ == NULL || strcasecmp(typ, "submit") != 0 ) {
+          if ( nm == NULL ) {
+            nl_error(-2, "Input with no name" );
+          } else if ( val != NULL ) {
+            nl_error(-2, "Input %s=%s", nm, val );
+            append_pair_to_submit(nm, val);
+          }
         }
-      } else if ( typ == NULL || strcasecmp(typ, "submit") != 0 ) {
-        if ( nm == NULL ) {
-          nl_error(1, "Input with no name" );
-        } else if ( val != NULL ) {
-          nl_error(-2, "Input %s=%s", nm, val );
-          append_pair_to_submit(nm, val);
+      } else if ( strcasecmp((const char*)xp->name, "select") == 0 ) {
+        xmlNodePtr xpc;
+        const char *nm = (const char *)xmlGetProp(xp, (const xmlChar *)"name" );
+        for (xpc = xp->children; xpc != NULL; xpc = xpc->next ) {
+          if ( xpc->name != NULL && strcasecmp((const char *)xpc->name, "option") == 0 &&
+               xmlHasProp( xpc, (const xmlChar *)"selected") ) {
+            const char *val = (const char *)xmlGetProp(xpc, (const xmlChar *)"value" );
+            if ( val != NULL && nm != NULL) {
+              append_pair_to_submit(nm, val);
+            }
+          }
         }
       }
     }

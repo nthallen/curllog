@@ -99,12 +99,14 @@ class curl_form {
     void append_pair_to_submit( const char *nm, const char *val );
     int set( xmlNodePtr xp, const char *name, const char *value );
     int checkbox(  xmlNodePtr xp, const char *name, const char *value, int checked );
+    int select_single(  xmlNodePtr xp, const char *name, const char *value );
     void submit_int(xmlNodePtr xp);
   public:
     curl_form(curl_obj *co, xmlNodePtr top);
     ~curl_form();
     void set( const char *name, const char *value );
     void checkbox( const char *name, const char *value, int checked );
+    int select_single(const char *name, const char *value);
     void submit_setup( const char *name, const char *value );
     void submit( const char *desc, const char *name, const char *value );
 };

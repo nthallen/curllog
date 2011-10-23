@@ -171,6 +171,7 @@ void curl_multi_obj::enqueue_transaction(Transaction *T) {
 
 void curl_multi_obj::dequeue_transaction() {
   if ( transaction_started ) {
+    transaction_end();
     delete Transactions.front();
     Transactions.pop_front();
   }
