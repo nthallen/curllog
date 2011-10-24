@@ -89,6 +89,7 @@ class curl_form {
   private:
     curl_obj *co;
     xmlNodePtr form;
+    xmlDocPtr doc;
     char *submit_buf;
     int submit_buf_size;
     int submit_size;

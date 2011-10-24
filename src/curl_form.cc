@@ -11,14 +11,16 @@
 curl_form::curl_form(curl_obj *co_in, xmlNodePtr top) {
   co = co_in;
   form = top;
+  doc = xmlNewDoc((const xmlChar *)"1.0");
   xmlUnlinkNode(top);
+  xmlDocSetRootElement(doc, form);
   submit_buf = 0;
   submit_buf_size = 0;
   submit_size = 0;
 }
 
 curl_form::~curl_form() {
-  xmlFreeNode(form);
+  xmlFreeDoc(doc);
   if (submit_buf) free(submit_buf);
 }
 
