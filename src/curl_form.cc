@@ -11,12 +11,15 @@
 curl_form::curl_form(curl_obj *co_in, xmlNodePtr top) {
   co = co_in;
   form = top;
+  xmlUnlinkNode(top);
   submit_buf = 0;
   submit_buf_size = 0;
   submit_size = 0;
 }
 
 curl_form::~curl_form() {
+  xmlFreeNode(form);
+  if (submit_buf) free(submit_buf);
 }
 
 /**
