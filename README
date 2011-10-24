@@ -17,7 +17,7 @@ ocs-fts:
   autoheader
   automake --add-missing
   autoconf
-  ./configure --prefix=$lcl CPPFLAGS=-I$lcl/include LDFLAGS='-L$lcl/lib -lrt'
+  ./configure --prefix=$lcl CPPFLAGS=-I$lcl/include LDFLAGS="-L$lcl/lib -lrt"
   make
 
 qnx6:

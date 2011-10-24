@@ -388,7 +388,7 @@ void curl_obj::transaction_start(const char *desc) {
       char tdir[80];
       int n = snprintf(tdir, 80, "%s/%02d", global->trans_dir, trans_num );
       nl_assert( n < 80 );
-      if (mkdir( tdir, 0666) == -1 )
+      if (mkdir( tdir, 0777) == -1 )
         nl_error(3, "FATAL: Error creating transaction directory %s\n", tdir);
       snprintf(tdir+n, 80-n, "/index.html" );
       req_summary = create_html_log( tdir, "Transaction %d Request Summary", trans_num);
