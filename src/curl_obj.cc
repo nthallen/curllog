@@ -83,19 +83,20 @@ curl_global::curl_global() {
   }
 }
 
-curl_global::~curl_global() {
+void curl_global::write_transaction_log() {
   if ( next_trans > 0 ) {
     FILE *fp, *ifp;
     char fname[80];
+    int tnum = next_trans;
     snprintf(fname, 80, "%s/index.html", trans_dir);
     fp = curl_obj::create_html_log( fname, "Transaction Log" );
     fprintf( fp, "<table id=\"TransIdx\">\n<tr><th>Start Time</th><th>Dur</th>"
         "<th>Transaction</th><th>Status</th></tr>\n" );
-    while ( --next_trans >= 0 ) {
-      snprintf( fname, 80, "%s/%02d/summary.txt", trans_dir, next_trans );
+    while ( --tnum >= 0 ) {
+      snprintf( fname, 80, "%s/%02d/summary.txt", trans_dir, tnum );
       ifp = fopen( fname, "r" );
       if ( ifp == NULL ) {
-        snprintf( fname, 80, "%s/%02d.summary.txt", trans_dir, next_trans );
+        snprintf( fname, 80, "%s/%02d.summary.txt", trans_dir, tnum );
         ifp = fopen( fname, "r" );
       }
       if ( ifp != NULL ) {
@@ -114,6 +115,10 @@ curl_global::~curl_global() {
     fprintf( fp, "</table>\n" );
     curl_obj::close_html_log(fp);
   }
+}
+
+curl_global::~curl_global() {
+  write_transaction_log();
   curl_global_cleanup();
 }
 
@@ -197,14 +202,32 @@ size_t curl_obj::log_write_data(char *ptr, size_t size, size_t nmemb) {
       CURLcode cc;
       cc = curl_easy_getinfo(handle, CURLINFO_CONTENT_TYPE, &ctype);
       if ( cc == 0 ) {
-        if ( ctype != NULL && strncmp( ctype, "text/html", 9 ) == 0 ) {
-          if ( parser ) {
-            htmlCtxtReset(parser);
-            htmlFreeParserCtxt(parser);
+        if ( parser ) {
+          switch ( parser_type ) {
+            case parser_is_html:
+              htmlCtxtReset(parser);
+              htmlFreeParserCtxt(parser);
+              parser = NULL;
+              break;
+            case parser_is_xml:
+              xmlCtxtReset(parser);
+              xmlFreeParserCtxt(parser);
+              parser = NULL;
+              break;
+            default: nl_error( 4, "Bad parser type");
           }
+        }
+        if ( ctype != NULL && strncmp( ctype, "text/html", 9 ) == 0 ) {
           // Set up parser context
           parser = htmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL, XML_CHAR_ENCODING_NONE);
           nl_assert(parser);
+          parser_type = parser_is_html;
+          parsing = 1;
+        } else if ( ctype != NULL && strncmp( ctype, "text/xml", 9 ) == 0 ) {
+          // Set up parser context
+          parser = xmlCreatePushParserCtxt(NULL, NULL, NULL, 0, NULL);
+          nl_assert(parser);
+          parser_type = parser_is_xml;
           parsing = 1;
         } else if (ctype == NULL) {
           nl_error( 1, "No Content-type found" );
@@ -214,7 +237,18 @@ size_t curl_obj::log_write_data(char *ptr, size_t size, size_t nmemb) {
       }
     }
     if ( parsing ) {
-      htmlParseChunk(parser, ptr, size*nmemb, 0);
+      switch (parser_type) {
+        case parser_is_html:
+          htmlParseChunk(parser, ptr, size*nmemb, 0);
+          break;
+        case parser_is_xml:
+          xmlParseChunk(parser, ptr, size*nmemb, 0);
+          break;
+        default:
+          nl_error( 4, "Bad Parser type" );
+      }
+    } else {
+      // We should log the body here as an unknown format?
     }
   }
   req_nbytes += size*nmemb;
@@ -361,11 +395,21 @@ void curl_obj::perform_cleanup(const char *req_desc, CURLcode code) {
     else fprintf( req_summary, "<td></td>" );
     if ( llvl >= CT_LOG_BODIES && parsing ) {
       char fname[80];
-      snprintf( fname, 80, "%s/%02d/req%02d_body.html",
-        global->trans_dir, trans_num, req_num );
-      add_base( xmlDocGetRootElement(parser->myDoc), req_url );
-      htmlSaveFile(fname, parser->myDoc);
-      fprintf( req_summary, "<td><a href=\"req%02d_body.html\">%s</a></td>", req_num, req_desc );
+      const char *ext;
+      switch (parser_type) {
+        case parser_is_html: ext = "html"; break;
+        case parser_is_xml: ext = "xml"; break;
+        default: nl_error(4, "Bad parser_type" );
+      }
+      snprintf( fname, 80, "%s/%02d/req%02d_body.%s",
+        global->trans_dir, trans_num, req_num, ext );
+      if ( parser_type == parser_is_html ) {
+        add_base( xmlDocGetRootElement(parser->myDoc), req_url );
+        htmlSaveFile(fname, parser->myDoc);
+      } else {
+        xmlSaveFile(fname, parser->myDoc);
+      }
+      fprintf( req_summary, "<td><a href=\"req%02d_body.%s\">%s</a></td>", req_num, ext, req_desc );
     } else {
       fprintf( req_summary, "<td>%s</td>", req_desc );
     }
@@ -463,6 +507,7 @@ FILE *curl_obj::create_html_log( const char *fname, const char *title, ... ) {
 FILE *curl_obj::close_html_log(FILE *fp) {
   fprintf( fp, "%s",
     "</body>\n</html>\n" );
+  fclose(fp);
   return NULL;
 }
 
@@ -575,3 +620,8 @@ const char *curl_obj::relative_url( const char *href ) {
 curl_form *curl_obj::find_form(int n) {
   return parser ? find_form_int(xmlDocGetRootElement(parser->myDoc), n) : NULL;
 }
+
+void curl_obj::write_transaction_log() {
+  global->write_transaction_log();
+}
+

@@ -19,12 +19,14 @@ class curl_global {
   public:
     static const char *trans_dir;
     static curl_global *getInstance();
+    void write_transaction_log();
     int next_transaction();
 };
 
 enum curl_log_level_t { CT_LOG_NOTHING,
   CT_LOG_SUMMARIES, CT_LOG_TRANSACTIONS,
   CT_LOG_HEADERS, CT_LOG_BODIES };
+enum curl_log_parser_t { parser_is_html, parser_is_xml };
 
 class curl_obj {
   private:
@@ -47,6 +49,7 @@ class curl_obj {
         I will set these to zero whenever freed.
       */
     htmlParserCtxtPtr parser;
+    curl_log_parser_t parser_type;
     /** Handle the data in an application-specific way */
     virtual size_t write_data(char *ptr, size_t size, size_t nmemb);
     /** Log the data and then call write_data() */
@@ -77,6 +80,7 @@ class curl_obj {
     void perform(const char *req_desc);
     void transaction_start(const char *desc);
     void transaction_end();
+    void write_transaction_log();
     curl_form *find_form(int n);
     xmlNodePtr get_parse_tree();
     const char *relative_url( const char *href );
