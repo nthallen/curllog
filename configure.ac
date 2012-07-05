@@ -34,6 +34,14 @@ CURLLIBS=`curl-config --libs`
 # xml2 and curl both provide config functions for finding their libraries,
 # but I'm ignoring those because I think a simple -lxml2 -lcurl will do the job
 # for now.
+AC_CHECK_LIB([z], [gzdirect],
+  ,[AC_MSG_ERROR([Required library libz not found])])
+AC_CHECK_LIB([iconv], [libiconv],
+  ,[AC_MSG_ERROR([Required library libiconv not found])])
+AC_CHECK_LIB([intl], [libintl_printf],
+  ,[AC_MSG_ERROR([Required library libintl not found])])
+AC_CHECK_LIB([idn], [idn_free],
+  ,[AC_MSG_ERROR([Required library libidn not found])])
 AC_CHECK_LIB([xml2], [htmlCreatePushParserCtxt],
   ,[AC_MSG_ERROR([Required library libxml2 not found])])
 AC_CHECK_LIB([curl], [curl_global_init],
