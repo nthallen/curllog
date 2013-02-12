@@ -16,3 +16,4 @@ ltmain.sh
 make.log
 missing
 stamp-h1
+FullBuild.*

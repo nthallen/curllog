@@ -1,6 +1,6 @@
 #include <errno.h>
 #include <sys/select.h>
-#include "curllog/Selector.h"
+#include "Selector.h"
 #include "nortlib.h"
 #include "nl_assert.h"
 

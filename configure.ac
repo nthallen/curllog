@@ -48,6 +48,9 @@ AC_CHECK_LIB([curl], [curl_global_init],
   ,[AC_MSG_ERROR([Required library libcurl not found])])
 AC_CHECK_LIB([nort], [nl_error],
   ,[AC_MSG_ERROR([Required library libnort not found])])
+AC_CHECK_LIB([tm], [tm_dev_name])
+AC_CHECK_LIB([tmpp], [libtmpp_is_present], [my_have_libtmpp=yes; LIBS="-ltmpp $LIBS"])
+AM_CONDITIONAL([HAVE_TMPP],[test x$my_have_libtmpp = xyes ])
 AC_SEARCH_LIBS([clock_gettime],[rt])
 
 # Checks for header files.
