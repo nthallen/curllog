@@ -1,3 +1,5 @@
+#include <string.h>
+#include <errno.h>
 #include "config.h"
 #include "curllog/curl_select.h"
 #include "nortlib.h"
@@ -70,12 +72,11 @@ Timeout *curl_multi::GetTimeout() {
   #endif
   
   struct timespec now;
-  int whole_secs;
+  int whole_secs, rv;
 
   rv = clock_gettime(CLOCK_REALTIME, &now);
   if ( rv == -1 )
     nl_error(3, "Error from clock_gettime(): '%s'", strerror(errno) );
-  }
   if (timeout_msec < 0) {
     now.tv_sec += 6;
   } else {
