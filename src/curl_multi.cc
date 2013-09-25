@@ -1,5 +1,3 @@
-#include <string.h>
-#include <errno.h>
 #include "config.h"
 #include "curllog/curl_select.h"
 #include "nortlib.h"
@@ -70,22 +68,11 @@ Timeout *curl_multi::GetTimeout() {
     if ( curl_multi_timeout(multi, &timeout_msec) != CURLM_OK )
       nl_error(4, "Unexpected error from curl_multi_timeout()" );
   #endif
-  
-  struct timespec now;
-  int whole_secs, rv;
-
-  rv = clock_gettime(CLOCK_REALTIME, &now);
-  if ( rv == -1 )
-    nl_error(3, "Error from clock_gettime(): '%s'", strerror(errno) );
-  if (timeout_msec < 0) {
-    now.tv_sec += 6;
+  if ( timeout_msec < 0 ) {
+    to.Set(6, 0); // Recommended maximum
   } else {
-    now.tv_nsec += timeout_msec*1000000L;
-    whole_secs = now.tv_nsec/1000000000L;
-    now.tv_sec += whole_secs;
-    now.tv_nsec -= whole_secs*1000000000L;
+    to.Set(0, timeout_msec);
   }
-  to.Set(now.tv_sec, now.tv_nsec/1000000L);
   return &to;
 }
 

@@ -6,7 +6,7 @@ SEL_INC =
 SEL_CPPFLAGS =
 else
 SEL_SRCS = Selectee.cc Selector.cc Timeout.cc
-SEL_INC = curllog/Selector.h curllog/Timeout.h
+SEL_INC = Selector/Selector.h Selector/Timeout.h
 SEL_CPPFLAGS = -I Selector
 endif
 
